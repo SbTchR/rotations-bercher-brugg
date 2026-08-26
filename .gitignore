@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+coverage/
+*.xlsx
+*.xls
+*.pdf
+.env
+.env.*
+design/qa-*.png
