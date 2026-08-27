@@ -121,7 +121,22 @@ export function WorkspaceProvider({ children }) {
       commit((current) => ({ ...current, students: [...current.students, student] }), `Fiche ajoutée: ${fullName(student)}`.trim())
     },
     updateStudent(student) {
-      commit((current) => ({ ...current, students: current.students.map((item) => item.id === student.id ? student : item) }), `Fiche mise à jour: ${fullName(student)}`.trim())
+      commit((current) => {
+        const students = current.students.map((item) => item.id === student.id ? student : item)
+        if (student.active !== false) return { ...current, students }
+        const byId = new Map(students.map((item) => [item.id, item]))
+        return {
+          ...current,
+          students,
+          scenarios: current.scenarios.map((scenario) => ({
+            ...scenario,
+            pairings: scenario.pairings.map((pairing) => ({ ...pairing, memberIds: pairing.memberIds.filter((id) => id !== student.id) })).filter((pairing) => {
+              const members = pairing.memberIds.map((id) => byId.get(id)).filter(Boolean)
+              return members.length >= 2 && members.some((item) => item.side === 'bercher') && members.some((item) => item.side === 'brugg')
+            }),
+          })),
+        }
+      }, student.active === false ? `Échange refusé: ${fullName(student)}`.trim() : `Fiche mise à jour: ${fullName(student)}`.trim())
     },
     removeStudent(studentId) {
       commit((current) => ({

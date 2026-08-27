@@ -26,7 +26,7 @@ export default function StudentsView() {
   const filtered = useMemo(() => workspace.students.filter((student) => {
     const text = `${fullName(student)} ${student.className} ${schoolLabel(student.school)}`.toLowerCase()
     return (school === 'all' || student.school === school)
-      && (status === 'all' || student.status === status)
+      && (status === 'all' || (status === 'refused' ? student.active === false : student.status === status))
       && text.includes(query.toLowerCase())
   }), [workspace.students, school, status, query])
 
@@ -82,12 +82,12 @@ export default function StudentsView() {
         </div>
         <div className="table-toolbar">
           <label className="search-field"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher un élève…" /></label>
-          <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filtrer par état"><option value="all">Tous les états</option><option value="complete">Complets</option><option value="review">À vérifier</option></select>
+          <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filtrer par état"><option value="all">Tous les états</option><option value="complete">Complets</option><option value="review">À vérifier</option><option value="refused">Échanges refusés</option></select>
           <button className="secondary-button compact" onClick={async () => { const { exportStudentsXlsx } = await import('../lib/importExport'); exportStudentsXlsx(workspace) }}><FileDown size={17} /> Exporter</button>
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th aria-label="Sélection" /><th>Élève</th><th>Établissement</th><th>Classe</th><th>Correspondant</th><th>Accueil</th><th>Condition</th><th>Rotation</th><th>État</th><th /></tr></thead>
+            <thead><tr><th aria-label="Sélection" /><th>Élève</th><th>Établissement</th><th>Classe</th><th>Correspondant</th><th>Accueil</th><th>Condition</th><th>Groupe</th><th>État</th><th /></tr></thead>
             <tbody>
               {grouped.flatMap((group) => [
                 <tr className="class-group-row" key={`${group.key}-heading`}><td colSpan="10"><strong>{group.className}</strong><span>{schoolLabel(group.school)} · {group.students.length} élève{group.students.length > 1 ? 's' : ''}</span></td></tr>,
@@ -100,8 +100,8 @@ export default function StudentsView() {
                     <td><span className={`correspondent-chip ${correspondent.state}`}>{correspondent.state === 'found' ? <Check size={13} /> : correspondent.state === 'missing' ? <AlertTriangle size={13} /> : null}{correspondent.state === 'found' ? fullName(correspondent.student) : correspondent.state === 'missing' ? `${correspondent.name} · non ajouté` : 'Non renseigné'}</span></td>
                     <td className={student.participation === 'travel_no_host' ? 'danger-text' : ''}>{participationLabel[student.participation] || (student.canHost ? 'Possible' : 'Impossible')}</td>
                     <td>{student.conditionType === 'none' ? 'Libre' : student.conditionType === 'regular_only' ? 'son correspondant' : student.conditionType === 'different_only' ? 'autre personne' : 'personne précise'}</td>
-                    <td>{student.rotation || '—'}</td>
-                    <td><span className={`status-label ${student.status === 'complete' ? 'success' : 'warning'}`}>{student.status === 'complete' ? <Check size={14} /> : <AlertTriangle size={14} />}{student.status === 'complete' ? 'Complet' : 'À vérifier'}</span></td>
+                    <td>{student.requiredRotation ? `Seulement ${student.requiredRotation}` : '—'}</td>
+                    <td><span className={`status-label ${student.active === false ? 'danger' : student.status === 'complete' ? 'success' : 'warning'}`}>{student.active === false ? <X size={14} /> : student.status === 'complete' ? <Check size={14} /> : <AlertTriangle size={14} />}{student.active === false ? 'Refusé' : student.status === 'complete' ? 'Complet' : 'À vérifier'}</span></td>
                     <td><button className="icon-button small" onClick={(event) => { event.stopPropagation(); setDraft(student) }} aria-label="Modifier"><ChevronRight /></button></td>
                   </tr>
                 }),
@@ -110,7 +110,7 @@ export default function StudentsView() {
           </table>
         </div>
         {selected && <div className="selection-bar"><span><Check size={16} /> 1 sélectionné</span><button onClick={() => setDraft(selected)}>Modifier</button><button className="danger-text" onClick={deleteSelected}><Trash2 size={16} /> Supprimer</button><button className="icon-button small" onClick={() => setSelectedId(null)} aria-label="Annuler la sélection"><X /></button></div>}
-        <footer className="table-summary"><span>{workspace.students.length} participants</span><span>{workspace.students.filter((student) => getCorrespondentStatus(student, workspace.students).state === 'found').length} correspondants ajoutés</span><span>{workspace.students.filter((student) => getCorrespondentStatus(student, workspace.students).state === 'missing').length} non ajoutés</span><span>{workspace.students.filter((student) => !student.canHost).length} accueils impossibles</span></footer>
+        <footer className="table-summary"><span>{workspace.students.filter((student) => student.active !== false).length} élèves maintenus</span><span>{workspace.students.filter((student) => student.active === false).length} échanges refusés</span><span>{workspace.students.filter((student) => getCorrespondentStatus(student, workspace.students).state === 'found').length} correspondants ajoutés</span><span>{workspace.students.filter((student) => !student.canHost).length} accueils impossibles</span></footer>
       </section>
 
       {draft && <StudentDrawer student={draft} students={workspace.students} onClose={() => setDraft(null)} onSave={saveStudent} />}

@@ -35,7 +35,7 @@ describe('evaluatePairing', () => {
       { ...base, id: 'b', side: 'bercher', firstName: 'A', lastName: 'B', gender: 'female', conditionType: 'named_only', namedPartner: 'Quelqu’un d’autre', regularCorrespondents: '' },
       { ...base, id: 'r', side: 'brugg', firstName: 'C', lastName: 'D', gender: 'female', regularCorrespondents: '' },
     ]
-    expect(evaluatePairing(['b', 'r'], students).conflicts.join(' ')).toContain('personne imposée')
+    expect(evaluatePairing(['b', 'r'], students).conflicts.join(' ')).toContain('condition sine qua non')
   })
 
   it('detects whether the named correspondent was added', () => {
@@ -62,5 +62,33 @@ describe('evaluatePairing', () => {
     ]
     expect(scenarioStats({ pairings: [] }, students).unassigned).toBe(1)
     expect(evaluatePairing(['b', 'r'], students).conflicts.join(' ')).toContain('ne participe pas au déplacement')
+  })
+
+  it('makes a requested group indispensable only when the pairing is placed in the other block', () => {
+    const students = [
+      { ...base, id: 'b', side: 'bercher', name: 'Léa Martin', gender: 'female', requiredRotation: 'A' },
+      { ...base, id: 'r', side: 'brugg', name: 'Nora Keller', gender: 'female' },
+    ]
+    expect(evaluatePairing(['b', 'r'], students, 'A').conflicts).toEqual([])
+    expect(evaluatePairing(['b', 'r'], students, 'B').conflicts.join(' ')).toContain('ne peut pas être dans le groupe B')
+  })
+
+  it('keeps optional conditions separate from indispensable conflicts', () => {
+    const students = [
+      { ...base, id: 'b', side: 'bercher', school: 'VP', className: '11VP1', name: 'Léa Martin', gender: 'female', regularCorrespondents: 'Nora Keller' },
+      { ...base, id: 'r', side: 'brugg', school: 'Bezirksschule', className: 'B1', name: 'Nora Keller', gender: 'female', regularCorrespondents: 'Léa Martin' },
+    ]
+    const result = evaluatePairing(['b', 'r'], students, 'A')
+    expect(result.conditions.indispensable.some((item) => item.label === 'Les deux élèves sont correspondants de base.')).toBe(true)
+    expect(result.conditions.optional.some((item) => item.label.includes('filières privilégiées'))).toBe(true)
+  })
+
+  it('treats a refused pupil as unavailable without deleting their record', () => {
+    const students = [
+      { ...base, id: 'b', side: 'bercher', name: 'Léa Martin', gender: 'female', active: false },
+      { ...base, id: 'r', side: 'brugg', name: 'Nora Keller', gender: 'female' },
+    ]
+    expect(scenarioStats({ pairings: [] }, students).unassigned).toBe(1)
+    expect(evaluatePairing(['b', 'r'], students, 'A').conflicts.join(' ')).toContain('retiré de l’échange')
   })
 })

@@ -87,10 +87,16 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
             <h3>Organisation</h3>
             <div className="form-grid two-cols">
               <label className="toggle-label"><input type="checkbox" checked={draft.acceptsOtherGender} onChange={(event) => update('acceptsOtherGender', event.target.checked)} /> Partenaire d’un autre sexe accepté</label>
-              <label>Rotation
-                <select value={draft.rotation} onChange={(event) => update('rotation', event.target.value)}><option value="">À décider</option><option value="A">A</option><option value="B">B</option></select>
-              </label>
+              <label className="toggle-label"><input type="checkbox" checked={Boolean(draft.requiredRotation)} onChange={(event) => update('requiredRotation', event.target.checked ? 'A' : '')} /> Condition indispensable de groupe</label>
             </div>
+            {draft.requiredRotation && <label>Ne peut participer que dans le groupe<select value={draft.requiredRotation} onChange={(event) => update('requiredRotation', event.target.value)}><option value="A">A</option><option value="B">B</option></select></label>}
+            <p className="field-help">En règle générale, les élèves ne choisissent pas leur groupe. Cochez uniquement si leur participation dépend du groupe A ou B.</p>
+          </section>
+
+          <section>
+            <h3>Décision</h3>
+            <label className="toggle-label"><input type="checkbox" checked={draft.active !== false} onChange={(event) => update('active', event.target.checked)} /> Élève maintenu dans l’échange</label>
+            <p className="field-help">Décochez si l’échange lui est refusé. Sa fiche reste conservée, mais il ne peut plus être apparié.</p>
           </section>
 
           <section>

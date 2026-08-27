@@ -7,7 +7,7 @@ export default function DashboardView({ onNavigate }) {
   const scenario = workspace.scenarios.find((item) => item.id === workspace.activeScenarioId) || workspace.scenarios[0]
   const stats = scenarioStats(scenario, workspace.students)
   const incomplete = workspace.students.filter((student) => student.status === 'review').length
-  const hardConflicts = scenario.pairings.reduce((sum, pairing) => sum + evaluatePairing(pairing.memberIds, workspace.students).conflicts.length, 0)
+  const hardConflicts = scenario.pairings.reduce((sum, pairing) => sum + evaluatePairing(pairing.memberIds, workspace.students, pairing.rotation).conflicts.length, 0)
   const schools = [
     ['VP', workspace.students.filter((student) => student.school === 'VP').length],
     ['VG', workspace.students.filter((student) => student.school === 'VG').length],

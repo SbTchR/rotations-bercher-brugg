@@ -258,6 +258,8 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .student-row.selected { background: var(--teal-soft); outline: 1px solid var(--teal); outline-offset: -1px; }
 .student-row.inspected { box-shadow: inset 3px 0 0 var(--coral); }
 .student-row.assigned { background: #fbfcfd; color: #8c9baa; }
+.student-row.inactive { background: #f8f2f1; color: #9b6c63; }
+.student-row.inactive .rotation-letter { color: #bb6b56; }
 .selection-box { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--border-strong); border-radius: 4px; color: #fff; background: #fff; }
 .student-row.selected .selection-box { background: var(--teal); border-color: var(--teal); }
 .gender-mark { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; font-weight: 800; font-style: normal; }
@@ -286,9 +288,12 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .rotation-b { border-left: 4px solid var(--coral); }
 .rotation-b > header { background: #fff3ef; }
 .rotation-undecided { border-left: 4px solid #9aa9b8; }
+.rotation-block.drop-target { box-shadow: 0 0 0 3px rgba(18,152,167,.2); border-color: var(--teal); }
 .pairing-stack { display: grid; gap: 9px; padding: 9px; }
 .empty-block { margin: 0; padding: 15px 8px; text-align: center; font-size: .65rem; }
 .pairing-card { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; text-align: left; }
+.pairing-card[draggable="true"] { cursor: grab; }
+.pairing-card[draggable="true"]:active { cursor: grabbing; }
 .pairing-card:hover { border-color: var(--border-strong); box-shadow: 0 6px 16px rgba(37,79,115,.08); }
 .pairing-card.selected { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(18,152,167,.09); }
 .pairing-card > header { display: flex; justify-content: space-between; color: var(--teal-dark); font-size: .63rem; font-weight: 750; }
@@ -311,6 +316,11 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .drop-zone svg { grid-row: 1 / 3; color: var(--teal); }
 .drop-zone strong { font-size: .7rem; }.drop-zone small { color: var(--muted); font-size: .59rem; }
 .drop-zone.ready { background: var(--teal-soft); border-color: var(--teal); }
+.new-group-controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.new-group-controls span { color: var(--muted); font-size: .62rem; font-weight: 700; }
+.new-group-controls button { padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: #fff; color: var(--navy); font-size: .62rem; }
+.new-group-controls button.active { border-color: var(--teal); background: var(--teal); color: #fff; }
+.new-group-controls .primary-button { margin-left: auto; border-color: var(--teal); }
 .pairing-inspector { padding-bottom: 13px; }
 .pairing-inspector > header { border-bottom: 1px solid var(--border); }
 .pairing-inspector.empty { display: grid; place-content: center; padding: 30px; color: var(--muted); text-align: center; }
@@ -329,6 +339,15 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .check-list p { display: grid; grid-template-columns: auto 1fr; gap: 7px; margin: 5px 0; color: #455a73; font-size: .63rem; line-height: 1.35; }
 .check-list p svg { width: 14px; height: 14px; }
 .check-list.success svg { color: var(--green); }.check-list.warning svg { color: var(--gold); }.check-list.danger svg { color: var(--coral); }
+.conditions-list { display: grid; gap: 6px; }
+.conditions-list.essential { background: #fff9f7; }
+.conditions-list.optional { background: #f8fcfd; }
+.conditions-list h3 { font-size: .7rem; }
+.conditions-list p { padding: 7px 8px; margin: 0; border-radius: 6px; background: #fff; }
+.conditions-list p.pass svg { color: var(--green); }
+.conditions-list p.review svg { color: var(--gold); }
+.conditions-list p.fail { color: #a63f2c; background: #fff1ed; }
+.conditions-list p.fail svg { color: var(--coral); }
 .pairing-inspector > label { margin: 12px 13px; }
 .host-class-grid { display: grid; gap: 9px; padding: 0 13px 13px; }
 .host-class-control { display: grid; gap: 5px; color: #354967; font-size: .68rem; font-weight: 650; }

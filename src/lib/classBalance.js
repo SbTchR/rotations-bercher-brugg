@@ -28,7 +28,7 @@ export function calculateClassBalances(scenario, students) {
       undecidedPairings += 1
       continue
     }
-    const members = pairing.memberIds.map((id) => byId.get(id)).filter(Boolean)
+    const members = pairing.memberIds.map((id) => byId.get(id)).filter((student) => student?.active !== false)
     const bercher = members.filter((student) => student.side === 'bercher')
     const brugg = members.filter((student) => student.side === 'brugg')
     if (!bercher.length || !brugg.length) continue
