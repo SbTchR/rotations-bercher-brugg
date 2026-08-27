@@ -240,7 +240,7 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 
 /* Matching */
 .matching-view { max-width: 1700px; }
-.matching-view.has-inspector { max-width: calc(1700px - 330px); margin-left: 330px; margin-right: 0; }
+.matching-view.has-inspector { max-width: 1700px; margin-left: max(0px, calc(320px - var(--sidebar) - 16px)); margin-right: 0; }
 .matching-view.has-inspector .matching-workspace { grid-template-columns: minmax(150px, .55fr) minmax(500px, 1.8fr) minmax(150px, .55fr); }
 .scenario-tabs { gap: 2px; margin-bottom: 0; }
 .scenario-tabs button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px 6px; border-bottom: 3px solid transparent; }
@@ -467,7 +467,7 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
   .topbar { grid-template-columns: var(--sidebar) 1fr auto; }
   .sidebar nav button { justify-content: center; padding: 12px; }
   .matching-workspace { grid-template-columns: minmax(195px,.62fr) minmax(540px,1.7fr) minmax(195px,.62fr); }
-  .matching-view.has-inspector { max-width: calc(1700px - 320px); margin-left: 320px; }
+  .matching-view.has-inspector { max-width: 1700px; margin-left: max(0px, calc(310px - var(--sidebar) - 16px)); }
   .matching-view.has-inspector .matching-workspace { grid-template-columns: minmax(150px, .55fr) minmax(500px, 1.8fr) minmax(150px, .55fr); }
   .pairing-inspector { position: fixed; z-index: 60; top: var(--topbar); left: 0; right: auto; bottom: 0; width: 310px; overflow: auto; border-radius: 0; box-shadow: 16px 0 36px rgba(23,34,59,.16); }
   .pairing-inspector.empty { display: none; }
