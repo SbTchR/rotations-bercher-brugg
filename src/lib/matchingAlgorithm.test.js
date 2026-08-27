@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { calculateClassBalances } from './classBalance.js'
 import { findOptimalPairings } from './matchingAlgorithm.js'
 
 const base = {
@@ -41,5 +42,28 @@ describe('findOptimalPairings', () => {
       { ...base, id: 'r2', side: 'brugg', name: 'Sarah', gender: 'female', participation: 'host_only' },
     ]
     expect(findOptimalPairings(students, new Set(['b1']))).toEqual([])
+  })
+
+  it('spreads flexible suggestions across the two blocks and limits class differences', () => {
+    const students = Array.from({ length: 4 }, (_, index) => [
+      { ...base, id: `b${index}`, side: 'bercher', name: `Élève Bercher ${index}`, school: 'VP', className: '11VP1', gender: 'female' },
+      { ...base, id: `r${index}`, side: 'brugg', name: `Élève Brugg ${index}`, school: 'Bezirksschule', className: 'B1', gender: 'female' },
+    ]).flat()
+    const suggestions = findOptimalPairings(students)
+    expect(suggestions.filter((pairing) => pairing.rotation === 'A')).toHaveLength(2)
+    expect(suggestions.filter((pairing) => pairing.rotation === 'B')).toHaveLength(2)
+    const { balances } = calculateClassBalances({ pairings: suggestions }, students)
+    expect(Math.max(...balances.flatMap((row) => [Math.abs(row.first.net), Math.abs(row.second.net)]))).toBe(0)
+  })
+
+  it('uses the existing groups when choosing a flexible block', () => {
+    const students = [
+      { ...base, id: 'old-b', side: 'bercher', name: 'Ancien Bercher', school: 'VP', className: '11VP1', gender: 'female' },
+      { ...base, id: 'old-r', side: 'brugg', name: 'Ancien Brugg', school: 'Bezirksschule', className: 'B1', gender: 'female' },
+      { ...base, id: 'new-b', side: 'bercher', name: 'Nouveau Bercher', school: 'VP', className: '11VP2', gender: 'female' },
+      { ...base, id: 'new-r', side: 'brugg', name: 'Nouveau Brugg', school: 'Bezirksschule', className: 'B2', gender: 'female' },
+    ]
+    const suggestions = findOptimalPairings(students, new Set(['old-b', 'old-r']), [{ memberIds: ['old-b', 'old-r'], rotation: 'A', bercherHostClass: '11VP1', bruggHostClass: 'B1' }])
+    expect(suggestions[0].rotation).toBe('B')
   })
 })
