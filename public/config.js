@@ -1,5 +1,5 @@
 window.ROTATIONS_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://iinzroyxhyffdjtcyaxn.supabase.co/rest/v1/',
+  supabaseAnonKey: 'sb_publishable_qsDuIG11c9_zJ4M6ot7pJQ_PCrXheHN',
   allowDemo: false,
 }
