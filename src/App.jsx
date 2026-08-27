@@ -1,14 +1,16 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { AccessProblem, AuthScreen, ConfigurationRequired, LoadingScreen } from './components/AccessScreens'
 import AppShell from './components/AppShell'
+import ViewLoadBoundary from './components/ViewLoadBoundary'
 import { useWorkspace } from './context/WorkspaceContext'
+import { lazyView } from './lib/lazyView'
 
-const DashboardView = lazy(() => import('./features/DashboardView'))
-const ExportsView = lazy(() => import('./features/ExportsView'))
-const MatchingView = lazy(() => import('./features/MatchingView'))
-const ScenariosView = lazy(() => import('./features/ScenariosView'))
-const SettingsView = lazy(() => import('./features/SettingsView'))
-const StudentsView = lazy(() => import('./features/StudentsView'))
+const DashboardView = lazyView('dashboard', () => import('./features/DashboardView'))
+const ExportsView = lazyView('exports', () => import('./features/ExportsView'))
+const MatchingView = lazyView('matching', () => import('./features/MatchingView'))
+const ScenariosView = lazyView('scenarios', () => import('./features/ScenariosView'))
+const SettingsView = lazyView('settings', () => import('./features/SettingsView'))
+const StudentsView = lazyView('students', () => import('./features/StudentsView'))
 
 const validViews = new Set(['dashboard', 'students', 'matching', 'scenarios', 'exports', 'settings'])
 const readHash = () => {
@@ -39,5 +41,5 @@ export default function App() {
     exports: <ExportsView />,
     settings: <SettingsView />,
   }[view]
-  return <AppShell current={view} onNavigate={navigate}><Suspense fallback={<div className="view-loader"><span className="loader" /><p>Ouverture…</p></div>}>{content}</Suspense></AppShell>
+  return <AppShell current={view} onNavigate={navigate}><ViewLoadBoundary key={view}><Suspense fallback={<div className="view-loader"><span className="loader" /><p>Ouverture…</p></div>}>{content}</Suspense></ViewLoadBoundary></AppShell>
 }
