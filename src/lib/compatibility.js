@@ -7,8 +7,41 @@ const normalized = (value = '') => value
   .replace(/[^a-z0-9]+/g, ' ')
   .trim()
 
-const travels = (student) => ['exchange_and_host', 'travel_no_host'].includes(student.participation)
-const hosts = (student) => student.canHost && ['exchange_and_host', 'host_only'].includes(student.participation)
+export function findStudentByName(value, students, oppositeSide = '') {
+  const wanted = normalized(value)
+  if (!wanted) return null
+  return students.find((student) => {
+    if (oppositeSide && student.side !== oppositeSide) return false
+    const candidate = normalized(fullName(student))
+    return candidate && (candidate === wanted || wanted.includes(candidate) || candidate.includes(wanted))
+  }) || null
+}
+
+export function getCorrespondentStatus(student, students) {
+  const name = student?.regularCorrespondents?.trim() || ''
+  if (!name) return { state: 'empty', name: '', student: null }
+  const oppositeSide = student.side === 'bercher' ? 'brugg' : 'bercher'
+  const match = findStudentByName(name, students, oppositeSide)
+  return { state: match ? 'found' : 'missing', name, student: match }
+}
+
+export function getTrack(student) {
+  if (!student) return ''
+  if (student.side === 'bercher') {
+    if (/VP/i.test(student.className || '')) return 'bezirk'
+    if (/VG/i.test(student.className || '')) return 'sekundar'
+  }
+  if (student.school === 'Bezirksschule' || /^\s*B/i.test(student.className || '')) return 'bezirk'
+  if (student.school === 'Sekundarschule' || /^\s*S/i.test(student.className || '')) return 'sekundar'
+  return ''
+}
+
+export function getTrackLabel(student) {
+  const track = getTrack(student)
+  if (track === 'bezirk') return student.side === 'bercher' ? 'VP · préférence Bezirks' : 'Bezirks · préférence VP'
+  if (track === 'sekundar') return student.side === 'bercher' ? 'VG · préférence Sekundar' : 'Sekundar · préférence VG'
+  return 'Filière non reconnue'
+}
 
 export function evaluatePairing(memberIds, students) {
   const byId = new Map(students.map((student) => [student.id, student]))
@@ -22,15 +55,14 @@ export function evaluatePairing(memberIds, students) {
   if (!bercher.length || !brugg.length) conflicts.push('Le groupe doit contenir des élèves des deux écoles.')
   else respected.push('Les deux écoles sont représentées')
 
-  const checkHosting = (hostsSide, visitors, label) => {
-    const capacity = hostsSide.filter(hosts).reduce((sum, student) => sum + Number(student.maxGuests || 0), 0)
-    const travelers = visitors.filter(travels).length
-    if (capacity < travelers) conflicts.push(`Capacité d’accueil insuffisante ${label} (${capacity}/${travelers}).`)
-    else respected.push(`Capacité d’accueil suffisante ${label}`)
-  }
   if (bercher.length && brugg.length) {
-    checkHosting(bercher, brugg, 'à Bercher')
-    checkHosting(brugg, bercher, 'à Brugg')
+    const trackPairs = bercher.flatMap((left) => brugg.map((right) => [getTrack(left), getTrack(right)]))
+    const knownTrackPairs = trackPairs.filter(([left, right]) => left && right)
+    if (knownTrackPairs.length && knownTrackPairs.every(([left, right]) => left === right)) {
+      respected.push('Filières privilégiées respectées (VP ↔ Bezirks, VG ↔ Sekundar)')
+    } else if (knownTrackPairs.some(([left, right]) => left !== right)) {
+      warnings.push('Filières différentes : préférence seulement, jamais bloquante.')
+    }
   }
 
   const activeRotations = [...new Set(members.map((student) => student.rotation).filter(Boolean))]
@@ -44,7 +76,6 @@ export function evaluatePairing(memberIds, students) {
     const regular = normalized(student.regularCorrespondents)
     const named = normalized(student.namedPartner)
 
-    if (student.participation === 'declined') conflicts.push(`${fullName(student)} ne participe pas et n’accueille pas.`)
     if (!student.acceptsOtherGender && student.gender !== 'unspecified') {
       const mismatch = opposite.some((item) => item.gender !== 'unspecified' && item.gender !== student.gender)
       if (mismatch) conflicts.push(`${fullName(student)} n’accepte pas un partenaire d’un autre sexe.`)
@@ -63,6 +94,8 @@ export function evaluatePairing(memberIds, students) {
     if (student.conditionType === 'different_only' && regular && oppositeNames.some((name) => regular.includes(name) || name.includes(regular))) {
       conflicts.push(`${fullName(student)} demande un autre partenaire que son correspondant habituel.`)
     }
+    if (student.conditionType === 'different_only' && !regular) warnings.push(`Correspondant actuel non renseigné pour ${fullName(student)} : la demande d’un autre partenaire ne peut pas être vérifiée.`)
+    if (student.conditionType === 'none') respected.push(`${fullName(student)} est libre quant au choix du partenaire`)
     if (student.notes) warnings.push(`Remarque confidentielle à vérifier pour ${fullName(student)}.`)
     if (student.status === 'review') warnings.push(`Fiche incomplète pour ${fullName(student)}.`)
   }
@@ -72,18 +105,19 @@ export function evaluatePairing(memberIds, students) {
     return others.some((other) => normalized(student.regularCorrespondents).includes(normalized(fullName(other))))
   }).length
   if (regularLinks && !conflicts.length) respected.push('Lien de correspondance existant valorisé')
-  if (!regularLinks && members.length) warnings.push('Aucun lien de correspondance existant détecté.')
 
-  const score = Math.max(0, Math.min(100, 100 - conflicts.length * 28 - warnings.length * 6 + Math.min(regularLinks * 3, 6)))
+  const rawScore = 100 - conflicts.length * 28 - warnings.length * 6 + Math.min(regularLinks * 3, 6)
+  const score = Math.max(0, Math.min(warnings.length ? 94 : 100, rawScore))
   return { score, respected: [...new Set(respected)], warnings: [...new Set(warnings)], conflicts: [...new Set(conflicts)] }
 }
 
 export function scenarioStats(scenario, students) {
   const studentIds = new Set(students.map((student) => student.id))
   const assigned = new Set(scenario.pairings.flatMap((pairing) => pairing.memberIds).filter((id) => studentIds.has(id)))
-  const eligible = students.filter((student) => student.participation !== 'declined')
+  const eligible = students
   const alertCount = scenario.pairings.filter((pairing) => evaluatePairing(pairing.memberIds, students).conflicts.length).length
-  const groupA = scenario.pairings.flatMap((pairing) => pairing.memberIds.map((id) => ({ id, rotation: pairing.rotation }))).filter((item) => item.rotation === 'A').length
-  const groupB = scenario.pairings.flatMap((pairing) => pairing.memberIds.map((id) => ({ id, rotation: pairing.rotation }))).filter((item) => item.rotation === 'B').length
-  return { assigned: assigned.size, unassigned: eligible.filter((student) => !assigned.has(student.id)).length, alertCount, groupA, groupB }
+  const groupA = scenario.pairings.filter((pairing) => pairing.rotation === 'A').length
+  const groupB = scenario.pairings.filter((pairing) => pairing.rotation === 'B').length
+  const undecided = scenario.pairings.filter((pairing) => !pairing.rotation).length
+  return { assigned: assigned.size, unassigned: eligible.filter((student) => !assigned.has(student.id)).length, alertCount, groupA, groupB, undecided }
 }

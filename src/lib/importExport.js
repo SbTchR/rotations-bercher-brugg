@@ -1,5 +1,6 @@
 import * as XLSX from '@e965/xlsx'
 import { normalizeWorkspace } from '../data/demoData.js'
+import { getCorrespondentStatus } from './compatibility.js'
 
 const yes = (value) => String(value || '').trim().toUpperCase() === 'OUI'
 const clean = (value) => String(value ?? '').trim()
@@ -15,7 +16,6 @@ const studentFromLegacy = (row, side, start) => {
   if (!name) return null
   const parts = name.split(/\s+/)
   const firstName = parts.shift() || ''
-  const multiple = yes(row[start + 4])
   return {
     id: crypto.randomUUID(),
     side,
@@ -29,7 +29,6 @@ const studentFromLegacy = (row, side, start) => {
     namedPartner: '',
     regularCorrespondents: clean(row[start + 3]),
     canHost: true,
-    maxGuests: multiple ? 2 : 1,
     acceptsOtherGender: yes(row[start + 5]),
     animals: '',
     rotation: clean(row[start + 8]).toUpperCase(),
@@ -108,10 +107,8 @@ export async function importJson(file) {
 
 export function exportStudentsXlsx(workspace) {
   const labels = {
-    exchange_and_host: 'Participe et accueille',
+    exchange_and_host: 'Participe — accueil possible',
     travel_no_host: 'Participe — accueil impossible',
-    host_only: 'Accueille uniquement',
-    declined: 'Ne participe pas',
   }
   const rows = workspace.students.map((student) => ({
     Élève: `${student.firstName} ${student.lastName}`.trim(),
@@ -120,9 +117,9 @@ export function exportStudentsXlsx(workspace) {
     Genre: student.gender,
     Participation: labels[student.participation],
     'Peut accueillir': student.canHost ? 'OUI' : 'NON',
-    'Nombre de places': student.maxGuests || 0,
     'Autre sexe accepté': student.acceptsOtherGender ? 'OUI' : 'NON',
-    'Correspondants habituels': student.regularCorrespondents,
+    'Correspondant actuel': student.regularCorrespondents,
+    'Correspondant ajouté': getCorrespondentStatus(student, workspace.students).state === 'found' ? 'OUI' : 'NON',
     'Condition': student.conditionType,
     'Personne précise': student.namedPartner,
     Rotation: student.rotation,
@@ -146,6 +143,8 @@ export function exportScenarioXlsx(workspace, scenario) {
       Bercher: members.filter((student) => student.side === 'bercher').map((student) => `${student.firstName} ${student.lastName}`.trim()).join(' + '),
       Brugg: members.filter((student) => student.side === 'brugg').map((student) => `${student.firstName} ${student.lastName}`.trim()).join(' + '),
       Rotation: pairing.rotation,
+      'Classe d’accueil à Bercher': pairing.bercherHostClass || members.find((student) => student.side === 'bercher')?.className || '',
+      'Classe d’accueil à Brugg': pairing.bruggHostClass || members.find((student) => student.side === 'brugg')?.className || '',
       Validé: pairing.locked ? 'OUI' : 'NON',
       Notes: pairing.notes || '',
     }

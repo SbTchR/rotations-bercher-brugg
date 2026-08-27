@@ -3,13 +3,14 @@ import { useMemo, useRef, useState } from 'react'
 import StudentDrawer from '../components/StudentDrawer'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { blankStudent } from '../data/demoData'
+import { fullName, getCorrespondentStatus } from '../lib/compatibility'
 
 const participationLabel = {
-  exchange_and_host: 'Participe et accueille',
+  exchange_and_host: 'Accueil possible',
   travel_no_host: 'Participe — accueil impossible',
-  host_only: 'Accueille uniquement',
-  declined: 'Ne participe pas',
 }
+
+const naturalCompare = (left, right) => left.localeCompare(right, 'fr-CH', { numeric: true, sensitivity: 'base' })
 
 export default function StudentsView() {
   const { workspace, actions } = useWorkspace()
@@ -29,6 +30,15 @@ export default function StudentsView() {
   }), [workspace.students, school, status, query])
 
   const selected = workspace.students.find((student) => student.id === selectedId)
+  const grouped = useMemo(() => {
+    const groups = new Map()
+    for (const student of filtered) {
+      const key = `${student.school}|${student.className || 'Sans classe'}`
+      if (!groups.has(key)) groups.set(key, { key, school: student.school, className: student.className || 'Sans classe', students: [] })
+      groups.get(key).students.push(student)
+    }
+    return [...groups.values()].sort((left, right) => naturalCompare(left.school, right.school) || naturalCompare(left.className, right.className))
+  }, [filtered])
   const chooseImport = async (event) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -76,29 +86,33 @@ export default function StudentsView() {
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th aria-label="Sélection" /><th>Élève</th><th>Établissement</th><th>Classe</th><th>Participation</th><th>Accueil</th><th>Conditions</th><th>Rotation</th><th>État</th><th /></tr></thead>
+            <thead><tr><th aria-label="Sélection" /><th>Élève</th><th>Établissement</th><th>Classe</th><th>Correspondant</th><th>Accueil</th><th>Condition</th><th>Rotation</th><th>État</th><th /></tr></thead>
             <tbody>
-              {filtered.map((student) => (
-                <tr key={student.id} className={selectedId === student.id ? 'selected' : ''} onClick={() => setSelectedId(student.id)}>
-                  <td><input type="radio" name="selected-student" checked={selectedId === student.id} onChange={() => setSelectedId(student.id)} aria-label={`Sélectionner ${student.firstName} ${student.lastName}`} /></td>
-                  <td><strong>{student.firstName} {student.lastName}</strong>{student.legacyImport && <small>Import ancien format</small>}</td>
-                  <td>{student.school}</td><td>{student.className}</td>
-                  <td className={student.participation === 'travel_no_host' ? 'danger-text' : ''}>{participationLabel[student.participation]}</td>
-                  <td>{student.canHost ? `${student.maxGuests} place${student.maxGuests > 1 ? 's' : ''}` : '—'}</td>
-                  <td>{student.conditionType === 'none' ? '—' : student.conditionType === 'regular_only' ? 'partenaire habituel' : student.conditionType === 'different_only' ? 'autre partenaire' : 'personne précise'}</td>
-                  <td>{student.rotation || '—'}</td>
-                  <td><span className={`status-label ${student.status === 'complete' ? 'success' : 'warning'}`}>{student.status === 'complete' ? <Check size={14} /> : <AlertTriangle size={14} />}{student.status === 'complete' ? 'Complet' : 'À vérifier'}</span></td>
-                  <td><button className="icon-button small" onClick={(event) => { event.stopPropagation(); setDraft(student) }} aria-label="Modifier"><ChevronRight /></button></td>
-                </tr>
-              ))}
+              {grouped.flatMap((group) => [
+                <tr className="class-group-row" key={`${group.key}-heading`}><td colSpan="10"><strong>{group.className}</strong><span>{group.school} · {group.students.length} élève{group.students.length > 1 ? 's' : ''}</span></td></tr>,
+                ...group.students.map((student) => {
+                  const correspondent = getCorrespondentStatus(student, workspace.students)
+                  return <tr key={student.id} className={selectedId === student.id ? 'selected' : ''} onClick={() => setSelectedId(student.id)}>
+                    <td><input type="radio" name="selected-student" checked={selectedId === student.id} onChange={() => setSelectedId(student.id)} aria-label={`Sélectionner ${student.firstName} ${student.lastName}`} /></td>
+                    <td><strong>{student.firstName} {student.lastName}</strong>{student.legacyImport && <small>Import ancien format</small>}</td>
+                    <td>{student.school}</td><td>{student.className}</td>
+                    <td><span className={`correspondent-chip ${correspondent.state}`}>{correspondent.state === 'found' ? <Check size={13} /> : correspondent.state === 'missing' ? <AlertTriangle size={13} /> : null}{correspondent.state === 'found' ? fullName(correspondent.student) : correspondent.state === 'missing' ? `${correspondent.name} · non ajouté` : 'Non renseigné'}</span></td>
+                    <td className={student.participation === 'travel_no_host' ? 'danger-text' : ''}>{participationLabel[student.participation] || (student.canHost ? 'Possible' : 'Impossible')}</td>
+                    <td>{student.conditionType === 'none' ? 'Libre' : student.conditionType === 'regular_only' ? 'son correspondant' : student.conditionType === 'different_only' ? 'autre personne' : 'personne précise'}</td>
+                    <td>{student.rotation || '—'}</td>
+                    <td><span className={`status-label ${student.status === 'complete' ? 'success' : 'warning'}`}>{student.status === 'complete' ? <Check size={14} /> : <AlertTriangle size={14} />}{student.status === 'complete' ? 'Complet' : 'À vérifier'}</span></td>
+                    <td><button className="icon-button small" onClick={(event) => { event.stopPropagation(); setDraft(student) }} aria-label="Modifier"><ChevronRight /></button></td>
+                  </tr>
+                }),
+              ])}
             </tbody>
           </table>
         </div>
         {selected && <div className="selection-bar"><span><Check size={16} /> 1 sélectionné</span><button onClick={() => setDraft(selected)}>Modifier</button><button className="danger-text" onClick={deleteSelected}><Trash2 size={16} /> Supprimer</button><button className="icon-button small" onClick={() => setSelectedId(null)} aria-label="Annuler la sélection"><X /></button></div>}
-        <footer className="table-summary"><span>{workspace.students.length} élèves</span><span>{workspace.students.filter((student) => student.participation === 'exchange_and_host').length} participent et accueillent</span><span>{workspace.students.filter((student) => student.participation === 'travel_no_host').length} sans accueil</span><span>{workspace.students.filter((student) => student.participation === 'host_only').length} accueillent uniquement</span></footer>
+        <footer className="table-summary"><span>{workspace.students.length} participants</span><span>{workspace.students.filter((student) => getCorrespondentStatus(student, workspace.students).state === 'found').length} correspondants ajoutés</span><span>{workspace.students.filter((student) => getCorrespondentStatus(student, workspace.students).state === 'missing').length} non ajoutés</span><span>{workspace.students.filter((student) => !student.canHost).length} accueils impossibles</span></footer>
       </section>
 
-      {draft && <StudentDrawer student={draft} onClose={() => setDraft(null)} onSave={saveStudent} />}
+      {draft && <StudentDrawer student={draft} students={workspace.students} onClose={() => setDraft(null)} onSave={saveStudent} />}
       {importState && <div className="modal-layer"><button className="modal-backdrop" onClick={() => setImportState(null)} aria-label="Fermer" /><section className="modal-card">
         <header><FileSpreadsheet /><div><h2>Importer le classeur</h2><p>{importState.filename}</p></div></header>
         {importState.error ? <div className="error-box">{importState.error}</div> : <>

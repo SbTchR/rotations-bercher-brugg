@@ -3,6 +3,8 @@ import {
   Check,
   CheckCircle2,
   CircleDashed,
+  House,
+  Link2,
   Lock,
   Plus,
   Search,
@@ -15,28 +17,54 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { evaluatePairing, fullName, scenarioStats } from '../lib/compatibility'
+import { calculateClassBalances } from '../lib/classBalance'
+import {
+  evaluatePairing,
+  findStudentByName,
+  fullName,
+  getCorrespondentStatus,
+  getTrackLabel,
+  scenarioStats,
+} from '../lib/compatibility'
 
 const genderSymbol = { female: '♀', male: '♂', unspecified: '•' }
+const naturalCompare = (left, right) => left.localeCompare(right, 'fr-CH', { numeric: true, sensitivity: 'base' })
 
-function StudentRow({ student, assigned, selected, onToggle }) {
+const conditionLabels = {
+  none: 'Libre — aucune personne imposée',
+  regular_only: 'Son correspondant actuel uniquement',
+  different_only: 'Une autre personne que son correspondant',
+  named_only: 'Une personne précise uniquement',
+}
+
+function groupByClass(students) {
+  const groups = new Map()
+  for (const student of students) {
+    const className = student.className || 'Sans classe'
+    if (!groups.has(className)) groups.set(className, [])
+    groups.get(className).push(student)
+  }
+  return [...groups.entries()].sort(([left], [right]) => naturalCompare(left, right))
+}
+
+function StudentRow({ student, assigned, selected, inspected, onSelect }) {
   const cues = []
-  if (student.conditionType === 'regular_only') cues.push('partenaire habituel')
+  if (student.conditionType === 'regular_only') cues.push('son correspondant')
+  if (student.conditionType === 'different_only') cues.push('autre personne')
   if (student.conditionType === 'named_only') cues.push('personne précise')
-  if (student.participation === 'travel_no_host') cues.push('accueil impossible')
-  if (!student.acceptsOtherGender) cues.push('autre sexe: non')
+  if (!student.acceptsOtherGender) cues.push('même sexe uniquement')
   if (student.status === 'review') cues.push('fiche à vérifier')
   return (
-    <button className={`student-row ${selected ? 'selected' : ''} ${assigned ? 'assigned' : ''}`} onClick={() => onToggle(student.id)} disabled={assigned}>
+    <button className={`student-row ${selected ? 'selected' : ''} ${inspected ? 'inspected' : ''} ${assigned ? 'assigned' : ''}`} onClick={() => onSelect(student)} aria-pressed={selected}>
       <span className="selection-box">{selected ? <Check size={14} /> : assigned ? <Lock size={13} /> : null}</span>
       <span className={`gender-mark ${student.gender}`}>{genderSymbol[student.gender]}</span>
-      <span className="student-row-main"><strong>{fullName(student)}</strong><small>{student.className}</small>{cues[0] && <em className={cues[0] === 'accueil impossible' ? 'danger-text' : ''}>• {cues[0]}</em>}</span>
+      <span className="student-row-main"><strong>{fullName(student)}</strong><small>{student.className}</small>{cues[0] && <em>• {cues[0]}</em>}</span>
       <span className="rotation-letter">{student.rotation || '–'}</span>
     </button>
   )
 }
 
-function StudentRail({ title, side, students, assigned, selectedIds, onToggle }) {
+function StudentRail({ title, side, students, assigned, selectedIds, inspectedId, onSelect }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
   const [school, setSchool] = useState('all')
@@ -44,15 +72,16 @@ function StudentRail({ title, side, students, assigned, selectedIds, onToggle })
     const matchText = `${fullName(student)} ${student.className}`.toLowerCase().includes(query.toLowerCase())
     const matchFilter = filter === 'all' || (filter === 'unassigned' ? !assigned.has(student.id) : student.status === 'review' || student.notes)
     const matchSchool = side === 'bercher' || school === 'all' || student.school === school
-    return matchText && matchFilter && matchSchool && student.participation !== 'declined'
+    return matchText && matchFilter && matchSchool
   })
+  const grouped = groupByClass(items)
   return (
     <section className="student-rail">
       <header><h2>{title}</h2>{side === 'brugg' && <select value={school} onChange={(event) => setSchool(event.target.value)} aria-label="Établissement de Brugg"><option value="all">Tous les établissements</option><option>Bezirksschule</option><option>Sekundarschule</option></select>}</header>
       <label className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher…" /></label>
       <div className="mini-tabs"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>Tous</button><button className={filter === 'unassigned' ? 'active' : ''} onClick={() => setFilter('unassigned')}>À placer</button><button className={filter === 'attention' ? 'active' : ''} onClick={() => setFilter('attention')}>Attention</button></div>
-      <div className="student-list">{items.map((student) => <StudentRow key={student.id} student={student} assigned={assigned.has(student.id)} selected={selectedIds.has(student.id)} onToggle={onToggle} />)}{!items.length && <p className="empty-note">Aucun élève dans ce filtre.</p>}</div>
-      <footer>{items.length} élève{items.length > 1 ? 's' : ''}</footer>
+      <div className="student-list">{grouped.map(([className, classStudents]) => <section className="rail-class-group" key={className}><header><strong>{className}</strong><span>{classStudents.length}</span></header>{classStudents.map((student) => <StudentRow key={student.id} student={student} assigned={assigned.has(student.id)} selected={selectedIds.has(student.id)} inspected={inspectedId === student.id} onSelect={onSelect} />)}</section>)}{!items.length && <p className="empty-note">Aucun élève dans ce filtre.</p>}</div>
+      <footer>{items.length} élève{items.length > 1 ? 's' : ''} · {grouped.length} classe{grouped.length > 1 ? 's' : ''}</footer>
     </section>
   )
 }
@@ -64,7 +93,7 @@ function PairingCard({ pairing, students, selected, onSelect }) {
   const status = result.conflicts.length ? 'conflict' : result.warnings.length ? 'warning' : 'success'
   return (
     <button className={`pairing-card ${selected ? 'selected' : ''} ${status}`} onClick={() => onSelect(pairing.id)}>
-      <header><span>{members.length > 2 ? `Groupe 1 → ${members.length - 1}` : 'Binôme'}</span>{pairing.locked ? <Lock size={15} /> : <Unlock size={15} />}</header>
+      <header><span>{members.length} élève{members.length > 1 ? 's' : ''}</span>{pairing.locked ? <Lock size={15} /> : <Unlock size={15} />}</header>
       <div className="pair-members">
         <div>{members.filter((student) => student.side === 'bercher').map((student) => <span key={student.id}><strong>{fullName(student)}</strong><small>{student.className}</small></span>)}</div>
         <i aria-hidden="true" />
@@ -75,17 +104,43 @@ function PairingCard({ pairing, students, selected, onSelect }) {
   )
 }
 
-function Inspector({ pairing, students, scenarioId, onClose }) {
+function StudentInspector({ student, students, onClose }) {
+  const correspondent = getCorrespondentStatus(student, students)
+  const requested = student.conditionType === 'named_only'
+    ? findStudentByName(student.namedPartner, students, student.side === 'bercher' ? 'brugg' : 'bercher')
+    : null
+  return (
+    <aside className="pairing-inspector student-inspector">
+      <header><div><h2>Conditions de l’élève</h2><small>{student.school} · {student.className}</small></div><button className="icon-button" onClick={onClose} aria-label="Fermer"><X /></button></header>
+      <div className="student-inspector-title"><span className={`gender-mark ${student.gender}`}>{genderSymbol[student.gender]}</span><div><strong>{fullName(student)}</strong><small>{getTrackLabel(student)}</small></div></div>
+      <section className="condition-summary">
+        <div><span>Rotation</span><strong className="rotation-value">{student.rotation ? `Groupe ${student.rotation}` : 'À décider'}</strong></div>
+        <div><span>Choix du partenaire</span><strong>{conditionLabels[student.conditionType] || 'Libre'}</strong></div>
+        <div><span>Partenaire d’un autre sexe</span><strong>{student.acceptsOtherGender ? 'Accepté' : 'Non accepté'}</strong></div>
+        <div><span>Accueil</span><strong>{student.canHost ? 'Possible' : 'Impossible · information seulement'}</strong></div>
+      </section>
+      <section className={`correspondent-card ${correspondent.state}`}><Link2 /><div><span>Correspondant actuel</span><strong>{correspondent.name || 'Non renseigné'}</strong><small>{correspondent.state === 'found' ? `Ajouté · ${fullName(correspondent.student)} (${correspondent.student.className})` : correspondent.state === 'missing' ? 'Pas encore ajouté dans l’application' : 'L’élève reste libre si aucune condition ne l’impose.'}</small></div></section>
+      {student.conditionType === 'named_only' && <section className={`correspondent-card ${requested ? 'found' : 'missing'}`}><UserPlus /><div><span>Personne demandée</span><strong>{student.namedPartner || 'Non renseignée'}</strong><small>{requested ? `Ajoutée · ${fullName(requested)} (${requested.className})` : 'Pas encore ajoutée dans l’application'}</small></div></section>}
+      {(student.groupPreference || student.animals || student.notes) && <section className="student-extra-details"><h3>Autres informations</h3>{student.groupPreference && <p><strong>Souhait de regroupement</strong><span>{student.groupPreference}</span></p>}{student.animals && <p><strong>Animaux</strong><span>{student.animals}</span></p>}{student.notes && <p className="confidential-detail"><strong>Remarque confidentielle</strong><span>{student.notes}</span></p>}</section>}
+    </aside>
+  )
+}
+
+function GroupInspector({ pairing, students, scenarioId, onClose }) {
   const { actions } = useWorkspace()
-  if (!pairing) return <aside className="pairing-inspector empty"><UsersRound size={34} /><h2>Compatibilité</h2><p>Sélectionnez un binôme ou un groupe pour voir les conditions respectées et les points à vérifier.</p></aside>
   const result = evaluatePairing(pairing.memberIds, students)
   const members = pairing.memberIds.map((id) => students.find((student) => student.id === id)).filter(Boolean)
+  const hostClasses = (side) => [...new Set(members.filter((student) => student.side === side).map((student) => student.className).filter(Boolean))]
+  const bercherClasses = hostClasses('bercher')
+  const bruggClasses = hostClasses('brugg')
+  const hostControl = (label, key, classes) => <label className="host-class-control">{label}<select value={pairing[key] || classes[0] || ''} onChange={(event) => actions.updatePairing(scenarioId, pairing.id, { [key]: event.target.value })}>{classes.map((className) => <option key={className}>{className}</option>)}</select></label>
   return (
     <aside className="pairing-inspector">
-      <header><h2>Compatibilité</h2><button className="icon-button" onClick={onClose} aria-label="Fermer"><X /></button></header>
+      <header><h2>Compatibilité du groupe</h2><button className="icon-button" onClick={onClose} aria-label="Fermer"><X /></button></header>
       <div className="inspector-members">{members.map((student) => <span key={student.id}><b className={`gender-mark ${student.gender}`}>{genderSymbol[student.gender]}</b><strong>{fullName(student)}</strong><small>{student.className}</small></span>)}</div>
       <div className="score-block"><div className={`score-ring ${result.conflicts.length ? 'bad' : result.warnings.length ? 'medium' : ''}`}><strong>{result.score}</strong><small>/100</small></div><div><b>{result.conflicts.length ? 'Incompatible' : result.warnings.length ? 'À vérifier' : 'Très bon'}</b><p>{result.conflicts.length ? 'Une condition bloquante doit être corrigée.' : 'Ce groupe répond aux critères renseignés.'}</p></div></div>
-      <label className="rotation-control">Rotation du groupe<select value={pairing.rotation || ''} onChange={(event) => actions.updatePairing(scenarioId, pairing.id, { rotation: event.target.value })}><option value="">À décider</option><option value="A">A</option><option value="B">B</option></select></label>
+      <label className="rotation-control">Bloc du groupe<select value={pairing.rotation || ''} onChange={(event) => actions.updatePairing(scenarioId, pairing.id, { rotation: event.target.value })}><option value="">À décider</option><option value="A">Bloc A</option><option value="B">Bloc B</option></select></label>
+      <div className="host-class-grid">{hostControl('Classe d’accueil à Bercher', 'bercherHostClass', bercherClasses)}{hostControl('Classe d’accueil à Brugg', 'bruggHostClass', bruggClasses)}</div>
       {!!result.respected.length && <section className="check-list success"><h3>Conditions respectées ({result.respected.length})</h3>{result.respected.map((item) => <p key={item}><CheckCircle2 /> {item}</p>)}</section>}
       {!!result.warnings.length && <section className="check-list warning"><h3>À vérifier ({result.warnings.length})</h3>{result.warnings.map((item) => <p key={item}><CircleDashed /> {item}</p>)}</section>}
       {!!result.conflicts.length && <section className="check-list danger"><h3>Contraintes non respectées ({result.conflicts.length})</h3>{result.conflicts.map((item) => <p key={item}><AlertTriangle /> {item}</p>)}</section>}
@@ -98,59 +153,121 @@ function Inspector({ pairing, students, scenarioId, onClose }) {
   )
 }
 
+function Inspector({ student, pairing, students, scenarioId, onClose }) {
+  if (student) return <StudentInspector student={student} students={students} onClose={onClose} />
+  if (pairing) return <GroupInspector pairing={pairing} students={students} scenarioId={scenarioId} onClose={onClose} />
+  return <aside className="pairing-inspector empty"><UsersRound size={34} /><h2>Conditions</h2><p>Sélectionnez un élève pour voir sa fiche résumée, ou un groupe pour contrôler sa compatibilité.</p></aside>
+}
+
+function RotationBlock({ rotation, pairings, students, selectedPairingId, onSelect, description }) {
+  return (
+    <section className={`rotation-block rotation-${rotation.toLowerCase()}`}>
+      <header><div><span>Bloc {rotation}</span><small>{description}</small></div><strong>{pairings.length} groupe{pairings.length > 1 ? 's' : ''}</strong></header>
+      <div className="pairing-stack">{pairings.map((pairing) => <PairingCard key={pairing.id} pairing={pairing} students={students} selected={pairing.id === selectedPairingId} onSelect={onSelect} />)}{!pairings.length && <p className="empty-block">Aucun groupe dans ce bloc.</p>}</div>
+    </section>
+  )
+}
+
+function BalanceValue({ value, net = false }) {
+  const label = net && value > 0 ? `+${value}` : value || '—'
+  return <span className={net ? value > 0 ? 'net-positive' : value < 0 ? 'net-negative' : 'net-zero' : ''}>{label}</span>
+}
+
+function ClassBalancePanel({ scenario, students }) {
+  const { balances, undecidedPairings } = useMemo(() => calculateClassBalances(scenario, students), [scenario, students])
+  const groups = balances.reduce((map, row) => {
+    if (!map.has(row.school)) map.set(row.school, [])
+    map.get(row.school).push(row)
+    return map
+  }, new Map())
+  return (
+    <section className="class-balance-panel">
+      <header><div><h2>Présence dans les classes</h2><p>Le solde indique combien d’élèves la classe gagne ou perd pendant chaque partie de la semaine.</p></div><House /></header>
+      {undecidedPairings > 0 && <div className="balance-warning"><AlertTriangle /> {undecidedPairings} groupe{undecidedPairings > 1 ? 's ne sont' : ' n’est'} pas encore compté{undecidedPairings > 1 ? 's' : ''}, car le bloc A/B reste à décider.</div>}
+      <div className="balance-table-wrapper"><table className="balance-table">
+        <thead><tr><th rowSpan="2">Classe</th><th colSpan="3">1re partie de la semaine</th><th colSpan="3">2e partie de la semaine</th></tr><tr><th>Partent</th><th>Arrivent</th><th>Solde</th><th>Partent</th><th>Arrivent</th><th>Solde</th></tr></thead>
+        {[...groups.entries()].map(([school, rows]) => <tbody key={school}><tr className="balance-school-row"><th colSpan="7">{school}</th></tr>{rows.map((row) => <tr key={row.key}><th>{row.className}</th><td><BalanceValue value={row.first.outgoing} /></td><td><BalanceValue value={row.first.incoming} /></td><td><BalanceValue value={row.first.net} net /></td><td><BalanceValue value={row.second.outgoing} /></td><td><BalanceValue value={row.second.incoming} /></td><td><BalanceValue value={row.second.net} net /></td></tr>)}</tbody>)}
+      </table></div>
+      <footer>Solde = arrivées − départs. Une valeur négative signifie qu’il y aura moins d’élèves dans la classe.</footer>
+    </section>
+  )
+}
+
 export default function MatchingView() {
   const { workspace, actions } = useWorkspace()
   const scenario = workspace.scenarios.find((item) => item.id === workspace.activeScenarioId) || workspace.scenarios[0]
   const [selectedIds, setSelectedIds] = useState(new Set())
-  const [selectedPairingId, setSelectedPairingId] = useState(scenario?.pairings[0]?.id || null)
+  const [selectedStudentId, setSelectedStudentId] = useState(null)
+  const [selectedPairingId, setSelectedPairingId] = useState(null)
   const assigned = useMemo(() => new Set(scenario?.pairings.flatMap((pairing) => pairing.memberIds) || []), [scenario])
+  if (!scenario) return null
   const stats = scenarioStats(scenario, workspace.students)
   const selectedPairing = scenario.pairings.find((pairing) => pairing.id === selectedPairingId)
-  const toggle = (id) => setSelectedIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })
+  const selectedStudent = workspace.students.find((student) => student.id === selectedStudentId)
+  const selectStudent = (student) => {
+    setSelectedStudentId(student.id)
+    setSelectedPairingId(null)
+    if (assigned.has(student.id)) return
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(student.id)) next.delete(student.id)
+      else next.add(student.id)
+      return next
+    })
+  }
+  const selectPairing = (id) => { setSelectedPairingId(id); setSelectedStudentId(null) }
   const createGroup = () => {
     const members = [...selectedIds]
     const selectedStudents = members.map((id) => workspace.students.find((student) => student.id === id)).filter(Boolean)
     if (!selectedStudents.some((student) => student.side === 'bercher') || !selectedStudents.some((student) => student.side === 'brugg')) return
     const rotations = [...new Set(selectedStudents.map((student) => student.rotation).filter(Boolean))]
-    const pairingId = actions.addPairing(scenario.id, members, rotations.length === 1 ? rotations[0] : '')
+    const pairingId = actions.addPairing(scenario.id, members, rotations.length === 1 ? rotations[0] : '', {
+      bercherHostClass: selectedStudents.find((student) => student.side === 'bercher')?.className || '',
+      bruggHostClass: selectedStudents.find((student) => student.side === 'brugg')?.className || '',
+    })
     setSelectedIds(new Set())
-    setSelectedPairingId(pairingId)
+    selectPairing(pairingId)
   }
   const suggest = () => {
-    const left = workspace.students.filter((student) => student.side === 'bercher' && !assigned.has(student.id) && student.participation !== 'declined')
-    const right = workspace.students.filter((student) => student.side === 'brugg' && !assigned.has(student.id) && student.participation !== 'declined')
+    const left = workspace.students.filter((student) => student.side === 'bercher' && !assigned.has(student.id))
+    const right = workspace.students.filter((student) => student.side === 'brugg' && !assigned.has(student.id))
     const candidates = left.flatMap((a) => right.map((b) => ({ ids: [a.id, b.id], result: evaluatePairing([a.id, b.id], workspace.students) })))
       .sort((a, b) => a.result.conflicts.length - b.result.conflicts.length || b.result.score - a.result.score)
     if (!candidates[0]) return
     const [a, b] = candidates[0].ids.map((id) => workspace.students.find((student) => student.id === id))
-    const pairingId = actions.addPairing(scenario.id, candidates[0].ids, a.rotation === b.rotation ? a.rotation : '')
-    setSelectedPairingId(pairingId)
+    const pairingId = actions.addPairing(scenario.id, candidates[0].ids, a.rotation === b.rotation ? a.rotation : '', { bercherHostClass: a.className, bruggHostClass: b.className })
+    selectPairing(pairingId)
   }
   const newScenario = () => {
     const name = window.prompt('Nom du nouveau scénario', `Proposition ${workspace.scenarios.length + 1}`)
     if (name?.trim()) actions.addScenario(name.trim())
   }
-  if (!scenario) return null
   const selectedSides = [...selectedIds].map((id) => workspace.students.find((student) => student.id === id)?.side)
   const canCreate = selectedSides.includes('bercher') && selectedSides.includes('brugg')
+  const blockA = scenario.pairings.filter((pairing) => pairing.rotation === 'A')
+  const blockB = scenario.pairings.filter((pairing) => pairing.rotation === 'B')
+  const undecided = scenario.pairings.filter((pairing) => !pairing.rotation)
   return (
     <div className="view matching-view">
       <div className="view-heading">
         <div><h1>Appairages</h1><p>Construisez et comparez vos propositions sans perdre les versions précédentes.</p></div>
         <div className="button-row"><button className="secondary-button" onClick={suggest}><Sparkles size={18} /> Meilleure suggestion</button><button className="primary-button" onClick={newScenario}><Plus size={18} /> Créer un scénario</button></div>
       </div>
-      <div className="scenario-tabs">{workspace.scenarios.map((item) => <button key={item.id} className={item.id === scenario.id ? 'active' : ''} onClick={() => { actions.setActiveScenario(item.id); setSelectedPairingId(item.pairings[0]?.id || null) }}>{item.name}{item.status === 'validated' && <Lock size={13} />}</button>)}<button className="add-tab" onClick={newScenario}><Plus /></button></div>
-      <div className="stats-strip"><span><UsersRound /> <strong>{stats.assigned}</strong><small>appariés</small></span><span><CircleDashed /><strong>{stats.unassigned}</strong><small>à placer</small></span><span className={stats.alertCount ? 'warning' : ''}><AlertTriangle /><strong>{stats.alertCount}</strong><small>alertes</small></span><span><b>A</b><strong>{stats.groupA}</strong><small>groupe A</small></span><span><b>B</b><strong>{stats.groupB}</strong><small>groupe B</small></span></div>
+      <div className="scenario-tabs">{workspace.scenarios.map((item) => <button key={item.id} className={item.id === scenario.id ? 'active' : ''} onClick={() => { actions.setActiveScenario(item.id); setSelectedPairingId(null); setSelectedStudentId(null); setSelectedIds(new Set()) }}>{item.name}{item.status === 'validated' && <Lock size={13} />}</button>)}<button className="add-tab" onClick={newScenario}><Plus /></button></div>
+      <div className="stats-strip"><span><UsersRound /> <strong>{stats.assigned}</strong><small>appariés</small></span><span><CircleDashed /><strong>{stats.unassigned}</strong><small>à placer</small></span><span className={stats.alertCount ? 'warning' : ''}><AlertTriangle /><strong>{stats.alertCount}</strong><small>alertes</small></span><span><b>A</b><strong>{stats.groupA}</strong><small>groupes</small></span><span><b>B</b><strong>{stats.groupB}</strong><small>groupes</small></span></div>
       <div className="matching-workspace">
-        <StudentRail title="Bercher" side="bercher" students={workspace.students.filter((student) => student.side === 'bercher')} assigned={assigned} selectedIds={selectedIds} onToggle={toggle} />
+        <StudentRail title="Bercher" side="bercher" students={workspace.students.filter((student) => student.side === 'bercher')} assigned={assigned} selectedIds={selectedIds} inspectedId={selectedStudentId} onSelect={selectStudent} />
         <section className="pairing-canvas">
-          <header><h2>Binômes et groupes</h2><span>{scenario.pairings.length} groupe{scenario.pairings.length > 1 ? 's' : ''}</span></header>
-          <div className="pairing-stack">{scenario.pairings.map((pairing) => <PairingCard key={pairing.id} pairing={pairing} students={workspace.students} selected={pairing.id === selectedPairingId} onSelect={setSelectedPairingId} />)}</div>
+          <header><h2>Blocs d’échange</h2><span>{scenario.pairings.length} groupe{scenario.pairings.length > 1 ? 's' : ''} au total</span></header>
+          <RotationBlock rotation="A" pairings={blockA} students={workspace.students} selectedPairingId={selectedPairingId} onSelect={selectPairing} description="Bercher voyage d’abord" />
+          <RotationBlock rotation="B" pairings={blockB} students={workspace.students} selectedPairingId={selectedPairingId} onSelect={selectPairing} description="Brugg voyage d’abord" />
+          {!!undecided.length && <section className="rotation-block rotation-undecided"><header><div><span>À décider</span><small>Bloc encore non attribué</small></div><strong>{undecided.length} groupe{undecided.length > 1 ? 's' : ''}</strong></header><div className="pairing-stack">{undecided.map((pairing) => <PairingCard key={pairing.id} pairing={pairing} students={workspace.students} selected={pairing.id === selectedPairingId} onSelect={selectPairing} />)}</div></section>}
           <button className={`drop-zone ${canCreate ? 'ready' : ''}`} disabled={!canCreate} onClick={createGroup}><UserPlus /><strong>{canCreate ? `Créer un groupe avec ${selectedIds.size} élèves` : 'Sélectionnez au moins un élève de chaque école'}</strong><small>Les appairages à trois sont acceptés.</small></button>
         </section>
-        <StudentRail title="Brugg" side="brugg" students={workspace.students.filter((student) => student.side === 'brugg')} assigned={assigned} selectedIds={selectedIds} onToggle={toggle} />
-        <Inspector pairing={selectedPairing} students={workspace.students} scenarioId={scenario.id} onClose={() => setSelectedPairingId(null)} />
+        <StudentRail title="Brugg" side="brugg" students={workspace.students.filter((student) => student.side === 'brugg')} assigned={assigned} selectedIds={selectedIds} inspectedId={selectedStudentId} onSelect={selectStudent} />
+        <Inspector student={selectedStudent} pairing={selectedPairing} students={workspace.students} scenarioId={scenario.id} onClose={() => { setSelectedStudentId(null); setSelectedPairingId(null) }} />
       </div>
+      <ClassBalancePanel scenario={scenario} students={workspace.students} />
     </div>
   )
 }

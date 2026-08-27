@@ -21,7 +21,11 @@ export function WorkspaceProvider({ children }) {
     setSyncMessage('')
     try {
       const result = await loadWorkspace()
-      if (result.requiresAuth) {
+      if (result.configurationRequired) {
+        setAccessState('configuration')
+        setWorkspace(null)
+        setUser(null)
+      } else if (result.requiresAuth) {
         setAccessState('auth')
         setWorkspace(null)
         setUser(null)
@@ -168,8 +172,8 @@ export function WorkspaceProvider({ children }) {
         scenarios: current.scenarios.map((scenario) => scenario.id === scenarioId ? { ...scenario, ...updates, updatedAt: new Date().toISOString() } : scenario),
       }), updates.status === 'validated' ? 'Scénario validé' : 'Scénario mis à jour')
     },
-    addPairing(scenarioId, memberIds, rotation = '') {
-      const pairing = { id: crypto.randomUUID(), memberIds, rotation, locked: false, notes: '' }
+    addPairing(scenarioId, memberIds, rotation = '', hostClasses = {}) {
+      const pairing = { id: crypto.randomUUID(), memberIds, rotation, locked: false, notes: '', ...hostClasses }
       commit((current) => ({
         ...current,
         scenarios: current.scenarios.map((scenario) => scenario.id === scenarioId

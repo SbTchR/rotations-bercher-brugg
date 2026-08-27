@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { AccessProblem, AuthScreen, LoadingScreen } from './components/AccessScreens'
+import { AccessProblem, AuthScreen, ConfigurationRequired, LoadingScreen } from './components/AccessScreens'
 import AppShell from './components/AppShell'
 import { useWorkspace } from './context/WorkspaceContext'
 
@@ -26,6 +26,7 @@ export default function App() {
   }, [])
   const navigate = (next) => { window.location.hash = `/${next}`; setView(next) }
   if (loading || accessState === 'loading') return <LoadingScreen />
+  if (accessState === 'configuration') return <ConfigurationRequired />
   if (accessState === 'auth') return <AuthScreen />
   if (accessState === 'unauthorized') return <AccessProblem unauthorized />
   if (accessState === 'error') return <AccessProblem />

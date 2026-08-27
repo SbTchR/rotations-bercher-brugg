@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { createBlankWorkspace, createDemoWorkspace, normalizeWorkspace } from '../data/demoData'
 
-const LOCAL_KEY = 'rotations-bercher-brugg-v1'
+const LOCAL_KEY = 'rotations-bercher-brugg-v2'
 const config = globalThis.window?.ROTATIONS_CONFIG || {}
 export const cloudEnabled = Boolean(config.supabaseUrl && config.supabaseAnonKey)
+const hostname = globalThis.window?.location?.hostname || ''
+export const demoModeAllowed = config.allowDemo === true || ['localhost', '127.0.0.1', '[::1]'].includes(hostname)
 export const supabase = cloudEnabled ? createClient(config.supabaseUrl, config.supabaseAnonKey) : null
 
 export async function requestMagicLink(email) {
@@ -18,7 +20,7 @@ export async function signOut() {
 }
 
 export async function getSession() {
-  if (!supabase) return { user: { id: 'demo-user', email: 'mode-demo@local', role: 'demo' } }
+  if (!supabase) return demoModeAllowed ? { user: { id: 'demo-user', email: 'mode-demo@local', role: 'demo' } } : null
   const { data, error } = await supabase.auth.getSession()
   if (error) throw error
   return data.session
@@ -26,6 +28,7 @@ export async function getSession() {
 
 export async function loadWorkspace() {
   if (!supabase) {
+    if (!demoModeAllowed) return { configurationRequired: true }
     try {
       const stored = localStorage.getItem(LOCAL_KEY)
       return { workspace: normalizeWorkspace(stored ? JSON.parse(stored) : createDemoWorkspace()), version: null }

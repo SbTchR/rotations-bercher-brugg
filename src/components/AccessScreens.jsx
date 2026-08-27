@@ -46,6 +46,20 @@ export function AuthScreen() {
   )
 }
 
+export function ConfigurationRequired() {
+  return (
+    <div className="auth-page">
+      <section className="auth-panel private-gate">
+        <Brand />
+        <LockKeyhole className="auth-icon" size={36} />
+        <h1>Espace privé non activé</h1>
+        <p>L’accès aux informations est fermé au public. Le stockage sécurisé et les trois adresses autorisées doivent encore être reliés à cette page.</p>
+        <div className="privacy-note"><LockKeyhole size={16} /> Aucune donnée d’élève n’est affichée ni enregistrée sur GitHub Pages.</div>
+      </section>
+    </div>
+  )
+}
+
 export function AccessProblem({ unauthorized = false }) {
   const { user, syncMessage, reload, signOut } = useWorkspace()
   return (
