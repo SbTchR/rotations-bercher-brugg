@@ -2,7 +2,6 @@ import {
   ArrowLeftRight,
   ClipboardList,
   Download,
-  LayoutDashboard,
   LogOut,
   Menu,
   Redo2,
@@ -18,7 +17,6 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { accountLabel } from '../lib/accounts'
 
 const navItems = [
-  { id: 'dashboard', label: 'Vue d’ensemble', icon: LayoutDashboard },
   { id: 'students', label: 'Inscriptions', icon: ClipboardList },
   { id: 'matching', label: 'Appairages', icon: ArrowLeftRight },
   { id: 'scenarios', label: 'Scénarios', icon: UsersRound },

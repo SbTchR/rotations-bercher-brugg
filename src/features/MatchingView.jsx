@@ -16,7 +16,9 @@ import {
   X,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import ScenarioModal from '../components/ScenarioModal'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { accountLabel } from '../lib/accounts'
 import { calculateClassBalances } from '../lib/classBalance'
 import {
   evaluatePairing,
@@ -51,9 +53,9 @@ function groupByClass(students) {
 
 function StudentRow({ student, assigned, selected, inspected, onSelect }) {
   const cues = []
-  if (student.conditionType === 'regular_only') cues.push('son correspondant')
-  if (student.conditionType === 'different_only') cues.push('autre personne')
-  if (student.conditionType === 'named_only') cues.push('personne précise')
+  if (student.conditionType === 'regular_only') cues.push(student.regularCorrespondents ? `son correspondant : ${student.regularCorrespondents}` : 'son correspondant')
+  if (student.conditionType === 'different_only') cues.push(student.regularCorrespondents ? `pas son correspondant : ${student.regularCorrespondents}` : 'pas son correspondant')
+  if (student.conditionType === 'named_only') cues.push(student.namedPartner ? `personne précise : ${student.namedPartner}` : 'personne précise')
   if (!student.acceptsOtherGender) cues.push('même sexe uniquement')
   if (student.participation === 'host_only') cues.push('accueille seulement')
   if (student.requiredRotation) cues.push(`groupe ${student.requiredRotation} indispensable`)
@@ -98,13 +100,13 @@ function PairingCard({ pairing, students, selected, onSelect, onInspectStudent, 
   const status = result.conflicts.length ? 'conflict' : result.warnings.length ? 'warning' : 'success'
   return (
     <article className={`pairing-card ${selected ? 'selected' : ''} ${status}`} draggable onDragStart={(event) => onDragStart(event, pairing.id)} onDragEnd={onDragEnd}>
-      <button className="pairing-card-heading" onClick={() => onSelect(pairing.id)}><span>{members.length} élève{members.length > 1 ? 's' : ''} · détails du groupe</span>{pairing.locked ? <Lock size={15} /> : <Unlock size={15} />}</button>
+      <button className="pairing-card-heading" onClick={() => onSelect(pairing.id)} aria-label="Ouvrir les détails du groupe">{pairing.locked ? <Lock size={15} /> : <Unlock size={15} />}</button>
       <div className="pair-members">
         <div>{members.filter((student) => student.side === 'bercher').map((student) => <button className="pair-member" key={student.id} onClick={() => onInspectStudent(student.id)}><strong>{fullName(student)}</strong><small>{student.className}</small></button>)}</div>
         <i aria-hidden="true" />
         <div>{members.filter((student) => student.side === 'brugg').map((student) => <button className="pair-member" key={student.id} onClick={() => onInspectStudent(student.id)}><strong>{fullName(student)}</strong><small>{student.className}</small></button>)}{missing > 0 && <span className="missing-member"><strong>Élève introuvable</strong><small>À réparer</small></span>}</div>
       </div>
-      <button className="pairing-card-status" onClick={() => onSelect(pairing.id)}>{status === 'success' ? <CheckCircle2 /> : <AlertTriangle />}<span>{status === 'conflict' ? result.conflicts[0] : status === 'warning' ? `À vérifier (${result.score}/100)` : `Compatible (${result.score}/100)`}</span><b>{pairing.rotation || '–'}</b></button>
+      <button className="pairing-card-status" onClick={() => onSelect(pairing.id)} aria-label={`Compatibilité : ${result.score}%`}>{status === 'success' ? <CheckCircle2 /> : <AlertTriangle />}<span>{result.score}%</span></button>
     </article>
   )
 }
@@ -215,7 +217,7 @@ function ClassBalancePanel({ scenario, students }) {
 }
 
 export default function MatchingView() {
-  const { workspace, actions } = useWorkspace()
+  const { workspace, actions, user } = useWorkspace()
   const scenario = workspace.scenarios.find((item) => item.id === workspace.activeScenarioId) || workspace.scenarios[0]
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [selectedStudentId, setSelectedStudentId] = useState(null)
@@ -224,6 +226,7 @@ export default function MatchingView() {
   const [draggedPairingId, setDraggedPairingId] = useState(null)
   const [dropTarget, setDropTarget] = useState(null)
   const [suggestionMessage, setSuggestionMessage] = useState('')
+  const [scenarioModalOpen, setScenarioModalOpen] = useState(false)
   const assigned = useMemo(() => new Set(scenario?.pairings.flatMap((pairing) => pairing.memberIds) || []), [scenario])
   if (!scenario) return null
   const stats = scenarioStats(scenario, workspace.students)
@@ -274,10 +277,7 @@ export default function MatchingView() {
     const optionalMatches = suggestions.reduce((total, suggestion) => total + suggestion.result.conditions.optional.filter((item) => item.state === 'pass').length, 0)
     setSuggestionMessage(`${suggestions.length} binôme${suggestions.length > 1 ? 's ont' : ' a'} été créé${suggestions.length > 1 ? 's' : ''} (${placed} élèves), avec ${optionalMatches} condition${optionalMatches > 1 ? 's facultatives remplies' : ' facultative remplie'}.`)
   }
-  const newScenario = () => {
-    const name = window.prompt('Nom du nouveau scénario', `Proposition ${workspace.scenarios.length + 1}`)
-    if (name?.trim()) actions.addScenario(name.trim())
-  }
+  const newScenario = () => setScenarioModalOpen(true)
   const selectedSides = [...selectedIds].map((id) => workspace.students.find((student) => student.id === id)?.side)
   const canCreate = selectedSides.includes('bercher') && selectedSides.includes('brugg')
   const blockA = scenario.pairings.filter((pairing) => pairing.rotation === 'A')
@@ -319,6 +319,7 @@ export default function MatchingView() {
         <Inspector student={selectedStudent} pairing={selectedPairing} students={workspace.students} scenarioId={scenario.id} onClose={() => { setSelectedStudentId(null); setSelectedPairingId(null) }} onDeactivate={deactivateStudent} />
       </div>
       <ClassBalancePanel scenario={scenario} students={workspace.students} />
+      {scenarioModalOpen && <ScenarioModal initialName={`Proposition ${workspace.scenarios.length + 1}`} initialCreatedBy={accountLabel(user?.email)} onClose={() => setScenarioModalOpen(false)} onSave={({ name, createdBy }) => { actions.addScenario(name, createdBy); setScenarioModalOpen(false) }} />}
     </div>
   )
 }

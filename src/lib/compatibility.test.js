@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluatePairing, fullName, getCorrespondentStatus, normalizeSchool, scenarioStats } from './compatibility.js'
+import { evaluatePairing, fullName, getCorrespondentStatus, isStudentEnrollmentComplete, normalizeSchool, scenarioStats } from './compatibility.js'
 
 const base = { participation: 'exchange_and_host', canHost: true, acceptsOtherGender: true, conditionType: 'none', rotation: 'A', notes: '', status: 'complete' }
 
@@ -53,6 +53,13 @@ describe('evaluatePairing', () => {
     expect(normalizeSchool('', 'B2', 'brugg')).toBe('Bezirksschule')
     expect(normalizeSchool('', 'S2', 'brugg')).toBe('Sekundarschule')
     expect(fullName({ name: 'Léa Müller', firstName: 'Ancien', lastName: 'Format' })).toBe('Léa Müller')
+  })
+
+  it('considère une fiche complète dès que les cinq renseignements attendus sont présents', () => {
+    const core = { name: 'Léa Martin', school: 'VP', className: '11VP1', gender: 'female', regularCorrespondents: 'Nora Keller' }
+    expect(isStudentEnrollmentComplete(core)).toBe(true)
+    expect(isStudentEnrollmentComplete({ ...core, regularCorrespondents: '' })).toBe(false)
+    expect(isStudentEnrollmentComplete({ ...core, gender: 'unspecified' })).toBe(false)
   })
 
   it('does not count host-only pupils as pupils to place', () => {

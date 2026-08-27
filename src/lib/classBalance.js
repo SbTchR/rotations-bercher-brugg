@@ -59,3 +59,64 @@ export function calculateClassBalances(scenario, students) {
 
   return { balances, undecidedPairings }
 }
+
+export function calculateClassMovementDetails(scenario, students) {
+  const byId = new Map(students.map((student) => [student.id, student]))
+  const rows = new Map()
+  const ensureClass = (student, forcedClassName = student?.className) => {
+    if (!student || !forcedClassName) return null
+    const key = `${student.side}|${student.school}|${forcedClassName}`
+    if (!rows.has(key)) rows.set(key, {
+      key,
+      side: student.side,
+      school: student.school,
+      className: forcedClassName,
+      first: { outgoing: [], incoming: [] },
+      second: { outgoing: [], incoming: [] },
+    })
+    return rows.get(key)
+  }
+  students.forEach((student) => ensureClass(student))
+
+  let undecidedPairings = 0
+  for (const pairing of scenario?.pairings || []) {
+    if (!pairing.rotation) {
+      undecidedPairings += 1
+      continue
+    }
+    const members = pairing.memberIds.map((id) => byId.get(id)).filter((student) => student?.active !== false)
+    const bercher = members.filter((student) => student.side === 'bercher')
+    const brugg = members.filter((student) => student.side === 'brugg')
+    if (!bercher.length || !brugg.length) continue
+
+    const bercherTravelHalf = pairing.rotation === 'A' ? 'first' : 'second'
+    const bruggTravelHalf = pairing.rotation === 'A' ? 'second' : 'first'
+    const bercherHostClass = pairing.bercherHostClass || bercher[0].className
+    const bruggHostClass = pairing.bruggHostClass || brugg[0].className
+    const bercherHost = ensureClass(bercher[0], bercherHostClass)
+    const bruggHostStudent = brugg.find((student) => student.className === bruggHostClass) || brugg[0]
+    const bruggHost = ensureClass(bruggHostStudent, bruggHostClass)
+    const bercherTravelers = bercher.filter((student) => student.participation !== 'host_only')
+    const bruggTravelers = brugg.filter((student) => student.participation !== 'host_only')
+
+    for (const student of bercherTravelers) {
+      ensureClass(student)[bercherTravelHalf].outgoing.push(student)
+      bruggHost[bercherTravelHalf].incoming.push(student)
+    }
+    for (const student of bruggTravelers) {
+      ensureClass(student)[bruggTravelHalf].outgoing.push(student)
+      bercherHost[bruggTravelHalf].incoming.push(student)
+    }
+  }
+
+  const classes = [...rows.values()].map((row) => ({
+    ...row,
+    first: { ...row.first, net: row.first.incoming.length - row.first.outgoing.length },
+    second: { ...row.second, net: row.second.incoming.length - row.second.outgoing.length },
+  })).sort((left, right) => {
+    const sideOrder = left.side === right.side ? 0 : left.side === 'bercher' ? -1 : 1
+    return sideOrder || naturalCompare(left.school, right.school) || naturalCompare(left.className, right.className)
+  })
+
+  return { classes, undecidedPairings }
+}

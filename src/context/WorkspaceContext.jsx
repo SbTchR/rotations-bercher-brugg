@@ -138,31 +138,35 @@ export function WorkspaceProvider({ children }) {
         }
       }, student.active === false ? `Échange refusé: ${fullName(student)}`.trim() : `Fiche mise à jour: ${fullName(student)}`.trim())
     },
-    removeStudent(studentId) {
+    removeStudents(studentIds) {
+      const ids = new Set(studentIds)
       commit((current) => ({
         ...current,
-        students: current.students.filter((student) => student.id !== studentId),
+        students: current.students.filter((student) => !ids.has(student.id)),
         scenarios: current.scenarios.map((scenario) => ({
           ...scenario,
           pairings: scenario.pairings
-            .map((pairing) => ({ ...pairing, memberIds: pairing.memberIds.filter((id) => id !== studentId) }))
-            .filter((pairing) => pairing.memberIds.length),
+            .map((pairing) => ({ ...pairing, memberIds: pairing.memberIds.filter((id) => !ids.has(id)) }))
+            .filter((pairing) => {
+              const members = pairing.memberIds.map((id) => current.students.find((student) => student.id === id && !ids.has(id))).filter(Boolean)
+              return members.length >= 2 && members.some((student) => student.side === 'bercher') && members.some((student) => student.side === 'brugg')
+            }),
         })),
-      }), 'Fiche supprimée')
+      }), `${ids.size} fiche${ids.size > 1 ? 's supprimées' : ' supprimée'}`)
     },
     setActiveScenario(id) {
       commit((current) => ({ ...current, activeScenarioId: id }))
     },
-    addScenario(name) {
+    addScenario(name, createdBy = '') {
       const id = crypto.randomUUID()
       const stamp = new Date().toISOString()
       commit((current) => ({
         ...current,
         activeScenarioId: id,
-        scenarios: [...current.scenarios, { id, name, status: 'draft', createdAt: stamp, updatedAt: stamp, pairings: [] }],
+        scenarios: [...current.scenarios, { id, name, createdBy, status: 'draft', createdAt: stamp, updatedAt: stamp, pairings: [] }],
       }), `Scénario créé: ${name}`)
     },
-    cloneScenario(sourceId, name) {
+    cloneScenario(sourceId, name, createdBy = '') {
       const id = crypto.randomUUID()
       const stamp = new Date().toISOString()
       commit((current) => {
@@ -174,6 +178,7 @@ export function WorkspaceProvider({ children }) {
             ...source,
             id,
             name,
+            createdBy,
             status: 'draft',
             createdAt: stamp,
             updatedAt: stamp,
@@ -181,6 +186,17 @@ export function WorkspaceProvider({ children }) {
           }],
         }
       }, `Scénario dupliqué: ${name}`)
+    },
+    removeScenario(scenarioId) {
+      commit((current) => {
+        if (current.scenarios.length <= 1) return current
+        const scenarios = current.scenarios.filter((scenario) => scenario.id !== scenarioId)
+        return {
+          ...current,
+          scenarios,
+          activeScenarioId: current.activeScenarioId === scenarioId ? scenarios[0].id : current.activeScenarioId,
+        }
+      }, 'Scénario supprimé')
     },
     updateScenario(scenarioId, updates) {
       commit((current) => ({

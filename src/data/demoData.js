@@ -1,6 +1,6 @@
 const now = '2026-08-26T18:00:00.000Z'
 
-import { normalizeSchool } from '../lib/compatibility'
+import { isStudentEnrollmentComplete, normalizeSchool } from '../lib/compatibility'
 
 const student = (id, side, suffix, values = {}) => ({
   id,
@@ -129,7 +129,7 @@ export const normalizeWorkspace = (value) => {
     students: value.students.map((student) => {
       const name = student.name?.trim() || [student.firstName, student.lastName].filter(Boolean).join(' ').trim()
       const otherInfo = student.otherInfo?.trim() || [student.animals && `Animaux : ${student.animals}`, student.groupPreference && `Souhait de regroupement : ${student.groupPreference}`, student.notes].filter(Boolean).join('\n')
-      return {
+      const normalizedStudent = {
         ...student,
         name,
         school: normalizeSchool(student.school, student.className, student.side),
@@ -142,6 +142,7 @@ export const normalizeWorkspace = (value) => {
         domicile: student.domicile || '',
         sharePhones: true,
       }
+      return { ...normalizedStudent, status: isStudentEnrollmentComplete(normalizedStudent) ? 'complete' : 'review' }
     }),
     scenarios: value.scenarios.length ? value.scenarios : demo.scenarios,
     activeScenarioId: value.activeScenarioId || value.scenarios[0]?.id || demo.activeScenarioId,

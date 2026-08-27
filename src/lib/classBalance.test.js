@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateClassBalances } from './classBalance.js'
+import { calculateClassBalances, calculateClassMovementDetails } from './classBalance.js'
 
 const student = (id, side, school, className) => ({ id, side, school, className })
 
@@ -28,5 +28,19 @@ describe('calculateClassBalances', () => {
     const result = calculateClassBalances({ pairings: [{ memberIds: ['b1', 'r1'], rotation: '' }] }, students)
     expect(result.undecidedPairings).toBe(1)
     expect(result.balances.every((row) => row.first.net === 0 && row.second.net === 0)).toBe(true)
+  })
+
+  it('détaille les élèves absents et supplémentaires pour chaque classe', () => {
+    const students = [
+      { ...student('b1', 'bercher', 'VP', '11VP1'), name: 'Léa Martin' },
+      { ...student('r1', 'brugg', 'Bezirksschule', 'B1'), name: 'Nora Keller' },
+    ]
+    const { classes } = calculateClassMovementDetails({ pairings: [{ memberIds: ['b1', 'r1'], rotation: 'A' }] }, students)
+    const bercher = classes.find((row) => row.className === '11VP1')
+    const brugg = classes.find((row) => row.className === 'B1')
+    expect(bercher.first.outgoing.map((student) => student.name)).toEqual(['Léa Martin'])
+    expect(bercher.second.incoming.map((student) => student.name)).toEqual(['Nora Keller'])
+    expect(brugg.first.incoming.map((student) => student.name)).toEqual(['Léa Martin'])
+    expect(brugg.second.outgoing.map((student) => student.name)).toEqual(['Nora Keller'])
   })
 })

@@ -1,6 +1,6 @@
 import { CheckCircle2, CircleDashed, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { fullName, getCorrespondentStatus } from '../lib/compatibility'
+import { fullName, getCorrespondentStatus, isStudentEnrollmentComplete } from '../lib/compatibility'
 
 const participationOptions = [
   ['exchange_and_host', 'Participe et peut accueillir'],
@@ -23,10 +23,7 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
   const update = (key, value) => setDraft((current) => ({ ...current, [key]: value }))
   const submit = (event) => {
     event.preventDefault()
-    const complete = draft.name?.trim() && draft.school && draft.className && ['female', 'male'].includes(draft.gender) && draft.participation
-      && (draft.conditionType !== 'named_only' || draft.namedPartner)
-      && (draft.conditionType !== 'different_only' || draft.regularCorrespondents)
-    onSave({ ...draft, status: complete ? 'complete' : 'review' })
+    onSave({ ...draft, status: isStudentEnrollmentComplete(draft) ? 'complete' : 'review' })
   }
   const correspondent = getCorrespondentStatus(draft, students)
   return (

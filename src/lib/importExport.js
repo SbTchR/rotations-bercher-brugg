@@ -1,6 +1,7 @@
 import * as XLSX from '@e965/xlsx'
 import { normalizeWorkspace } from '../data/demoData.js'
-import { fullName, getCorrespondentStatus, normalizeSchool } from './compatibility.js'
+import { fullName, getCorrespondentStatus, isStudentEnrollmentComplete, normalizeSchool } from './compatibility.js'
+import { calculateClassMovementDetails } from './classBalance.js'
 
 const yes = (value) => value === true || ['OUI', 'YES', '1', 'VRAI'].includes(String(value || '').trim().toUpperCase())
 const clean = (value) => String(value ?? '').trim()
@@ -38,7 +39,7 @@ const studentFromModernRow = (row) => {
   const normalizedCondition = conditionType(valueFrom(row, 'Condition partenaire', 'Condition'))
   const groupCondition = clean(valueFrom(row, 'Condition de groupe', 'Groupe indispensable')).toUpperCase().match(/(?:GROUPE\s*)?([AB])\b/)?.[1] || ''
   const normalizedGender = gender(row.Genre)
-  return {
+  const student = {
     id: crypto.randomUUID(),
     side,
     name,
@@ -64,8 +65,9 @@ const studentFromModernRow = (row) => {
     address: clean(row.Adresse),
     domicile: clean(row.Domicile),
     sharePhones: true,
-    status: name && className && ['female', 'male'].includes(normalizedGender) && (normalizedCondition !== 'named_only' || clean(valueFrom(row, 'Personne demandée', 'Personne précise'))) ? 'complete' : 'review',
+    status: 'review',
   }
+  return { ...student, status: isStudentEnrollmentComplete(student) ? 'complete' : 'review' }
 }
 
 const studentFromLegacy = (row, side, start) => {
@@ -218,22 +220,137 @@ const conditionLabelForExport = (condition) => ({
   named_only: 'Personne précise uniquement',
 }[condition] || 'Libre')
 
-export function exportScenarioXlsx(workspace, scenario) {
-  const byId = new Map(workspace.students.map((student) => [student.id, student]))
-  const rows = scenario.pairings.map((pairing, index) => {
-    const members = pairing.memberIds.map((id) => byId.get(id)).filter(Boolean)
-    return {
-      Groupe: index + 1,
-      Bercher: members.filter((student) => student.side === 'bercher').map(fullName).join(' + '),
-      Brugg: members.filter((student) => student.side === 'brugg').map(fullName).join(' + '),
-      Rotation: pairing.rotation,
-      'Classe d’accueil à Bercher': pairing.bercherHostClass || members.find((student) => student.side === 'bercher')?.className || '',
-      'Classe d’accueil à Brugg': pairing.bruggHostClass || members.find((student) => student.side === 'brugg')?.className || '',
-      Validé: pairing.locked ? 'OUI' : 'NON',
-      Notes: pairing.notes || '',
+const genderLabelForExport = (genderValue) => ({ female: 'Fille', male: 'Garçon' }[genderValue] || 'Non renseigné')
+const safeFilename = (value) => clean(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'scenario'
+const participantDetails = (student) => [
+  fullName(student),
+  `${schoolLabelForExport(student.school)} · ${student.className || 'Classe non renseignée'}`,
+  genderLabelForExport(student.gender),
+  `Tél. élève : ${student.studentPhone || '—'}`,
+  `Tél. parents : ${student.parentPhone || '—'}`,
+  `Adresse : ${student.address || '—'}`,
+  `Domicile : ${student.domicile || '—'}`,
+].join('\n')
+const namesForExport = (students) => students.length ? students.map((student) => `${fullName(student)} (${student.className || '—'})`).join('\n') : '—'
+
+const titleStyle = { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 14 }, fill: { fgColor: { rgb: '117A8B' } }, alignment: { horizontal: 'center', vertical: 'center' } }
+const sectionStyle = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1E91A0' } }, alignment: { horizontal: 'center', vertical: 'center' } }
+const secondarySectionStyle = { font: { bold: true, color: { rgb: '843D29' } }, fill: { fgColor: { rgb: 'FFE9E2' } }, alignment: { horizontal: 'center', vertical: 'center' } }
+const headerStyle = { font: { bold: true, color: { rgb: '334967' } }, fill: { fgColor: { rgb: 'EAF3F7' } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } }
+const cellStyle = { alignment: { vertical: 'top', wrapText: true } }
+
+const applyStyle = (sheet, range, style) => {
+  const decoded = XLSX.utils.decode_range(range)
+  for (let row = decoded.s.r; row <= decoded.e.r; row += 1) {
+    for (let column = decoded.s.c; column <= decoded.e.c; column += 1) {
+      const address = XLSX.utils.encode_cell({ r: row, c: column })
+      if (!sheet[address]) sheet[address] = { t: 's', v: '' }
+      sheet[address].s = style
     }
-  })
+  }
+}
+
+const pairingMembers = (pairing, byId, side) => pairing.memberIds.map((id) => byId.get(id)).filter((student) => student?.side === side)
+
+export function buildScenarioWorkbook(workspace, scenario) {
+  const byId = new Map(workspace.students.map((student) => [student.id, student]))
   const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), scenario.name.slice(0, 31))
-  XLSX.writeFile(workbook, `${scenario.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}.xlsx`)
+  const groupsA = scenario.pairings.filter((pairing) => pairing.rotation === 'A')
+  const groupsB = scenario.pairings.filter((pairing) => pairing.rotation === 'B')
+  const groupRows = [[`Scénario : ${scenario.name}`, '', '', '', '', '', '', '', ''], ['Groupes A', '', '', '', '', 'Groupes B', '', '', ''], ['Groupe', 'Élève(s) de Bercher', 'Élève(s) de Brugg', 'Validation / informations', '', 'Groupe', 'Élève(s) de Bercher', 'Élève(s) de Brugg', 'Validation / informations']]
+  const groupCount = Math.max(groupsA.length, groupsB.length, 1)
+  for (let index = 0; index < groupCount; index += 1) {
+    const addGroup = (pairing, block, number) => {
+      if (!pairing) return ['', '', '', '']
+      const bercher = pairingMembers(pairing, byId, 'bercher')
+      const brugg = pairingMembers(pairing, byId, 'brugg')
+      return [
+        `${block}${number}`,
+        bercher.map(participantDetails).join('\n\n'),
+        brugg.map(participantDetails).join('\n\n'),
+        [
+          pairing.locked ? 'Validé' : 'À contrôler',
+          `Accueil à Bercher : ${pairing.bercherHostClass || bercher[0]?.className || '—'}`,
+          `Accueil à Brugg : ${pairing.bruggHostClass || brugg[0]?.className || '—'}`,
+          pairing.notes ? `Note : ${pairing.notes}` : '',
+        ].filter(Boolean).join('\n'),
+      ]
+    }
+    groupRows.push([...addGroup(groupsA[index], 'A', index + 1), '', ...addGroup(groupsB[index], 'B', index + 1)])
+  }
+  const groupsSheet = XLSX.utils.aoa_to_sheet(groupRows)
+  groupsSheet['!merges'] = [XLSX.utils.decode_range('A1:I1'), XLSX.utils.decode_range('A2:D2'), XLSX.utils.decode_range('F2:I2')]
+  groupsSheet['!cols'] = [{ wch: 10 }, { wch: 38 }, { wch: 38 }, { wch: 30 }, { wch: 3 }, { wch: 10 }, { wch: 38 }, { wch: 38 }, { wch: 30 }]
+  groupsSheet['!rows'] = [{ hpt: 26 }, { hpt: 22 }, { hpt: 31 }, ...Array.from({ length: groupCount }, () => ({ hpt: 130 }))]
+  applyStyle(groupsSheet, 'A1:I1', titleStyle)
+  applyStyle(groupsSheet, 'A2:D2', sectionStyle)
+  applyStyle(groupsSheet, 'F2:I2', secondarySectionStyle)
+  applyStyle(groupsSheet, 'A3:D3', headerStyle)
+  applyStyle(groupsSheet, 'F3:I3', headerStyle)
+  applyStyle(groupsSheet, `A4:I${groupCount + 3}`, cellStyle)
+  XLSX.utils.book_append_sheet(workbook, groupsSheet, 'Groupes A-B')
+
+  const orderedPairings = [...scenario.pairings].sort((left, right) => (left.rotation || 'Z').localeCompare(right.rotation || 'Z'))
+  const detailedRows = [[`Détail des élèves — ${scenario.name}`, '', '', '', '', '', '', '', '', '', '', '', '', ''], ['Bloc', 'Groupe', 'École', 'Nom et prénom', 'Classe', 'Genre', 'Téléphone élève', 'Téléphone parents', 'Adresse', 'Domicile', 'Autres membres du groupe', 'Classe d’accueil', 'Validé', 'Note']]
+  const blockCounters = { A: 0, B: 0, '': 0 }
+  for (const pairing of orderedPairings) {
+    const block = pairing.rotation || ''
+    blockCounters[block] += 1
+    const members = pairing.memberIds.map((id) => byId.get(id)).filter(Boolean)
+    for (const member of members) {
+      const others = members.filter((student) => student.id !== member.id)
+      const hostClass = member.side === 'bercher' ? pairing.bercherHostClass || members.find((student) => student.side === 'bercher')?.className || '' : pairing.bruggHostClass || members.find((student) => student.side === 'brugg')?.className || ''
+      detailedRows.push([block || 'À décider', `${block || '—'}${blockCounters[block]}`, member.side === 'bercher' ? 'Bercher' : 'Brugg', fullName(member), member.className || '', genderLabelForExport(member.gender), member.studentPhone || '', member.parentPhone || '', member.address || '', member.domicile || '', namesForExport(others), hostClass, pairing.locked ? 'OUI' : 'NON', pairing.notes || ''])
+    }
+  }
+  const detailsSheet = XLSX.utils.aoa_to_sheet(detailedRows)
+  detailsSheet['!merges'] = [XLSX.utils.decode_range('A1:N1')]
+  detailsSheet['!cols'] = [{ wch: 12 }, { wch: 11 }, { wch: 12 }, { wch: 26 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 19 }, { wch: 26 }, { wch: 18 }, { wch: 30 }, { wch: 18 }, { wch: 11 }, { wch: 30 }]
+  detailsSheet['!rows'] = [{ hpt: 26 }, { hpt: 32 }, ...Array.from({ length: Math.max(detailedRows.length - 2, 1) }, () => ({ hpt: 38 }))]
+  detailsSheet['!autofilter'] = { ref: `A2:N${Math.max(detailedRows.length, 2)}` }
+  applyStyle(detailsSheet, 'A1:N1', titleStyle)
+  applyStyle(detailsSheet, 'A2:N2', headerStyle)
+  applyStyle(detailsSheet, `A3:N${Math.max(detailedRows.length, 3)}`, cellStyle)
+  XLSX.utils.book_append_sheet(workbook, detailsSheet, 'Détail des élèves')
+  return workbook
+}
+
+export function exportScenarioXlsx(workspace, scenario) {
+  const workbook = buildScenarioWorkbook(workspace, scenario)
+  XLSX.writeFile(workbook, `${safeFilename(scenario.name)}.xlsx`)
+}
+
+export function buildClassBalanceWorkbook(workspace, scenario) {
+  const { classes, undecidedPairings } = calculateClassMovementDetails(scenario, workspace.students)
+  const rows = [[`Mouvements des classes — ${scenario.name}`, '', '', '', '', '', '', ''], ['', '', '1re partie de la semaine', '', '', '2e partie de la semaine', '', ''], ['Établissement', 'Classe', 'Élèves absents', 'Élèves supplémentaires', 'Solde', 'Élèves absents', 'Élèves supplémentaires', 'Solde']]
+  for (const row of classes) {
+    rows.push([
+      schoolLabelForExport(row.school),
+      row.className,
+      namesForExport(row.first.outgoing),
+      namesForExport(row.first.incoming),
+      row.first.net > 0 ? `+${row.first.net} élève${row.first.net > 1 ? 's' : ''}` : row.first.net < 0 ? `${row.first.net} élève${row.first.net < -1 ? 's' : ''}` : '0 élève',
+      namesForExport(row.second.outgoing),
+      namesForExport(row.second.incoming),
+      row.second.net > 0 ? `+${row.second.net} élève${row.second.net > 1 ? 's' : ''}` : row.second.net < 0 ? `${row.second.net} élève${row.second.net < -1 ? 's' : ''}` : '0 élève',
+    ])
+  }
+  if (undecidedPairings) rows.push(['', '', `Attention : ${undecidedPairings} groupe${undecidedPairings > 1 ? 's ne sont' : ' n’est'} pas compté${undecidedPairings > 1 ? 's' : ''} car le bloc A/B n’est pas défini.`, '', '', '', '', ''])
+  const sheet = XLSX.utils.aoa_to_sheet(rows)
+  sheet['!merges'] = [XLSX.utils.decode_range('A1:H1'), XLSX.utils.decode_range('C2:E2'), XLSX.utils.decode_range('F2:H2')]
+  sheet['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 31 }, { wch: 31 }, { wch: 14 }, { wch: 31 }, { wch: 31 }, { wch: 14 }]
+  sheet['!rows'] = [{ hpt: 26 }, { hpt: 22 }, { hpt: 32 }, ...Array.from({ length: Math.max(rows.length - 3, 1) }, () => ({ hpt: 44 }))]
+  sheet['!autofilter'] = { ref: `A3:H${Math.max(rows.length, 3)}` }
+  applyStyle(sheet, 'A1:H1', titleStyle)
+  applyStyle(sheet, 'C2:E2', sectionStyle)
+  applyStyle(sheet, 'F2:H2', secondarySectionStyle)
+  applyStyle(sheet, 'A3:H3', headerStyle)
+  applyStyle(sheet, `A4:H${Math.max(rows.length, 4)}`, cellStyle)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Mouvements des classes')
+  return workbook
+}
+
+export function exportClassBalanceXlsx(workspace, scenario) {
+  XLSX.writeFile(buildClassBalanceWorkbook(workspace, scenario), `${safeFilename(scenario.name)}-mouvements-classes.xlsx`)
 }

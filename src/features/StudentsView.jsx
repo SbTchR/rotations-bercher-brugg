@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from 'react'
 import StudentDrawer from '../components/StudentDrawer'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { blankStudent } from '../data/demoData'
-import { fullName, getCorrespondentStatus, schoolLabel } from '../lib/compatibility'
+import { fullName, getCorrespondentStatus, isStudentEnrollmentComplete, schoolLabel } from '../lib/compatibility'
 
 const participationLabel = {
   exchange_and_host: 'Accueil possible',
@@ -18,7 +18,7 @@ export default function StudentsView() {
   const [school, setSchool] = useState('all')
   const [status, setStatus] = useState('all')
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedIds, setSelectedIds] = useState(new Set())
   const [draft, setDraft] = useState(null)
   const [importState, setImportState] = useState(null)
   const fileRef = useRef(null)
@@ -26,11 +26,13 @@ export default function StudentsView() {
   const filtered = useMemo(() => workspace.students.filter((student) => {
     const text = `${fullName(student)} ${student.className} ${schoolLabel(student.school)}`.toLowerCase()
     return (school === 'all' || student.school === school)
-      && (status === 'all' || (status === 'refused' ? student.active === false : student.status === status))
+      && (status === 'all' || (status === 'refused' ? student.active === false : isStudentEnrollmentComplete(student) ? status === 'complete' : status === 'review'))
       && text.includes(query.toLowerCase())
   }), [workspace.students, school, status, query])
 
-  const selected = workspace.students.find((student) => student.id === selectedId)
+  const selected = useMemo(() => workspace.students.filter((student) => selectedIds.has(student.id)), [workspace.students, selectedIds])
+  const selectedOne = selected.length === 1 ? selected[0] : null
+  const allVisibleSelected = filtered.length > 0 && filtered.every((student) => selectedIds.has(student.id))
   const grouped = useMemo(() => {
     const groups = new Map()
     for (const student of filtered) {
@@ -57,10 +59,24 @@ export default function StudentsView() {
     else actions.addStudent(student)
     setDraft(null)
   }
+  const toggleSelection = (id) => setSelectedIds((current) => {
+    const next = new Set(current)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const toggleVisibleSelection = () => setSelectedIds((current) => {
+    const next = new Set(current)
+    if (allVisibleSelected) filtered.forEach((student) => next.delete(student.id))
+    else filtered.forEach((student) => next.add(student.id))
+    return next
+  })
   const deleteSelected = () => {
-    if (!selected) return
-    actions.removeStudent(selected.id)
-    setSelectedId(null)
+    if (!selected.length) return
+    const wording = selected.length === 1 ? `Supprimer la fiche de ${fullName(selected[0])} ?` : `Supprimer les ${selected.length} fiches sélectionnées ?`
+    if (!window.confirm(`${wording}\n\nLes élèves seront aussi retirés des groupes où ils figurent. Cette action pourra être annulée.`)) return
+    actions.removeStudents(selected.map((student) => student.id))
+    setSelectedIds(new Set())
   }
 
   return (
@@ -87,21 +103,22 @@ export default function StudentsView() {
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th aria-label="Sélection" /><th>Élève</th><th>Établissement</th><th>Classe</th><th>Correspondant</th><th>Accueil</th><th>Condition</th><th>Groupe</th><th>État</th><th /></tr></thead>
+            <thead><tr><th aria-label="Sélection"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Sélectionner tous les élèves affichés" /></th><th>Élève</th><th>Établissement</th><th>Classe</th><th>Correspondant</th><th>Accueil</th><th>Condition</th><th>Groupe</th><th>État</th><th /></tr></thead>
             <tbody>
               {grouped.flatMap((group) => [
                 <tr className="class-group-row" key={`${group.key}-heading`}><td colSpan="10"><strong>{group.className}</strong><span>{schoolLabel(group.school)} · {group.students.length} élève{group.students.length > 1 ? 's' : ''}</span></td></tr>,
                 ...group.students.map((student) => {
                   const correspondent = getCorrespondentStatus(student, workspace.students)
-                  return <tr key={student.id} className={selectedId === student.id ? 'selected' : ''} onClick={() => setSelectedId(student.id)}>
-                    <td><input type="radio" name="selected-student" checked={selectedId === student.id} onChange={() => setSelectedId(student.id)} aria-label={`Sélectionner ${fullName(student)}`} /></td>
+                  const complete = isStudentEnrollmentComplete(student)
+                  return <tr key={student.id} className={selectedIds.has(student.id) ? 'selected' : ''} onClick={() => toggleSelection(student.id)}>
+                    <td><input type="checkbox" checked={selectedIds.has(student.id)} onClick={(event) => event.stopPropagation()} onChange={() => toggleSelection(student.id)} aria-label={`Sélectionner ${fullName(student)}`} /></td>
                     <td><strong>{fullName(student)}</strong>{student.legacyImport && <small>Import ancien format</small>}</td>
                     <td>{schoolLabel(student.school)}</td><td>{student.className}</td>
                     <td><span className={`correspondent-chip ${correspondent.state}`}>{correspondent.state === 'found' ? <Check size={13} /> : correspondent.state === 'missing' ? <AlertTriangle size={13} /> : null}{correspondent.state === 'found' ? fullName(correspondent.student) : correspondent.state === 'missing' ? `${correspondent.name} · non ajouté` : 'Non renseigné'}</span></td>
                     <td className={student.participation === 'travel_no_host' ? 'danger-text' : ''}>{participationLabel[student.participation] || (student.canHost ? 'Possible' : 'Impossible')}</td>
                     <td>{student.conditionType === 'none' ? 'Libre' : student.conditionType === 'regular_only' ? 'son correspondant' : student.conditionType === 'different_only' ? 'autre personne' : 'personne précise'}</td>
                     <td>{student.requiredRotation ? `Seulement ${student.requiredRotation}` : '—'}</td>
-                    <td><span className={`status-label ${student.active === false ? 'danger' : student.status === 'complete' ? 'success' : 'warning'}`}>{student.active === false ? <X size={14} /> : student.status === 'complete' ? <Check size={14} /> : <AlertTriangle size={14} />}{student.active === false ? 'Refusé' : student.status === 'complete' ? 'Complet' : 'À vérifier'}</span></td>
+                    <td><span className={`status-label ${student.active === false ? 'danger' : complete ? 'success' : 'warning'}`}>{student.active === false ? <X size={14} /> : complete ? <Check size={14} /> : <AlertTriangle size={14} />}{student.active === false ? 'Refusé' : complete ? 'Complet' : 'À vérifier'}</span></td>
                     <td><button className="icon-button small" onClick={(event) => { event.stopPropagation(); setDraft(student) }} aria-label="Modifier"><ChevronRight /></button></td>
                   </tr>
                 }),
@@ -109,7 +126,7 @@ export default function StudentsView() {
             </tbody>
           </table>
         </div>
-        {selected && <div className="selection-bar"><span><Check size={16} /> 1 sélectionné</span><button onClick={() => setDraft(selected)}>Modifier</button><button className="danger-text" onClick={deleteSelected}><Trash2 size={16} /> Supprimer</button><button className="icon-button small" onClick={() => setSelectedId(null)} aria-label="Annuler la sélection"><X /></button></div>}
+        {!!selected.length && <div className="selection-bar"><span><Check size={16} /> {selected.length} sélectionné{selected.length > 1 ? 's' : ''}</span>{selectedOne && <button onClick={() => setDraft(selectedOne)}>Modifier</button>}<button className="danger-text" onClick={deleteSelected}><Trash2 size={16} /> Supprimer</button><button className="icon-button small" onClick={() => setSelectedIds(new Set())} aria-label="Annuler la sélection"><X /></button></div>}
         <footer className="table-summary"><span>{workspace.students.filter((student) => student.active !== false).length} élèves maintenus</span><span>{workspace.students.filter((student) => student.active === false).length} échanges refusés</span><span>{workspace.students.filter((student) => getCorrespondentStatus(student, workspace.students).state === 'found').length} correspondants ajoutés</span><span>{workspace.students.filter((student) => !student.canHost).length} accueils impossibles</span></footer>
       </section>
 

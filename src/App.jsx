@@ -5,17 +5,16 @@ import ViewLoadBoundary from './components/ViewLoadBoundary'
 import { useWorkspace } from './context/WorkspaceContext'
 import { lazyView } from './lib/lazyView'
 
-const DashboardView = lazyView('dashboard', () => import('./features/DashboardView'))
 const ExportsView = lazyView('exports', () => import('./features/ExportsView'))
 const MatchingView = lazyView('matching', () => import('./features/MatchingView'))
 const ScenariosView = lazyView('scenarios', () => import('./features/ScenariosView'))
 const SettingsView = lazyView('settings', () => import('./features/SettingsView'))
 const StudentsView = lazyView('students', () => import('./features/StudentsView'))
 
-const validViews = new Set(['dashboard', 'students', 'matching', 'scenarios', 'exports', 'settings'])
+const validViews = new Set(['students', 'matching', 'scenarios', 'exports', 'settings'])
 const readHash = () => {
   const value = window.location.hash.replace('#/', '')
-  return validViews.has(value) ? value : 'dashboard'
+  return validViews.has(value) ? value : 'students'
 }
 
 export default function App() {
@@ -34,7 +33,6 @@ export default function App() {
   if (accessState === 'error') return <AccessProblem />
   if (!workspace) return <LoadingScreen />
   const content = {
-    dashboard: <DashboardView onNavigate={navigate} />,
     students: <StudentsView />,
     matching: <MatchingView />,
     scenarios: <ScenariosView onNavigate={navigate} />,

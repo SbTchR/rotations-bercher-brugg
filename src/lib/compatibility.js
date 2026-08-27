@@ -1,5 +1,13 @@
 export const fullName = (student) => student?.name?.trim() || [student?.firstName, student?.lastName].filter(Boolean).join(' ').trim()
 
+export const isStudentEnrollmentComplete = (student) => Boolean(
+  fullName(student)
+  && student?.school
+  && student?.className?.trim()
+  && ['female', 'male'].includes(student?.gender)
+  && student?.regularCorrespondents?.trim(),
+)
+
 export const schoolLabels = {
   VP: 'VP · Bercher',
   VG: 'VG · Bercher',
