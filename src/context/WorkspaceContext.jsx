@@ -198,6 +198,24 @@ export function WorkspaceProvider({ children }) {
       }), 'Nouveau groupe d’appairage')
       return pairing.id
     },
+    addPairings(scenarioId, suggestions) {
+      const pairings = suggestions.map((suggestion) => ({
+        id: crypto.randomUUID(),
+        memberIds: suggestion.memberIds,
+        rotation: suggestion.rotation,
+        locked: false,
+        notes: 'Proposé automatiquement — à contrôler.',
+        bercherHostClass: suggestion.bercherHostClass || '',
+        bruggHostClass: suggestion.bruggHostClass || '',
+      }))
+      commit((current) => ({
+        ...current,
+        scenarios: current.scenarios.map((scenario) => scenario.id === scenarioId
+          ? { ...scenario, pairings: [...scenario.pairings, ...pairings], updatedAt: new Date().toISOString() }
+          : scenario),
+      }), `${pairings.length} binôme${pairings.length > 1 ? 's proposés' : ' proposé'} automatiquement`)
+      return pairings.map((pairing) => pairing.id)
+    },
     updatePairing(scenarioId, pairingId, updates) {
       commit((current) => ({
         ...current,

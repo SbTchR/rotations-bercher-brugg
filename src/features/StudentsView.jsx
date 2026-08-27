@@ -117,8 +117,8 @@ export default function StudentsView() {
       {importState && <div className="modal-layer"><button className="modal-backdrop" onClick={() => setImportState(null)} aria-label="Fermer" /><section className="modal-card">
         <header><FileSpreadsheet /><div><h2>Importer le classeur</h2><p>{importState.filename}</p></div></header>
         {importState.error ? <div className="error-box">{importState.error}</div> : <>
-          <p><strong>{importState.count} élèves</strong> ont été reconnus et <strong>{importState.pairings} appairages exacts</strong> ont pu être récupérés automatiquement.</p>
-          <div className="warning-box"><AlertTriangle /> L’import remplacera les données actuelles. Les remarques libres ne sont jamais interprétées automatiquement et toutes les fiches importées seront marquées « À vérifier ». Vous pourrez annuler juste après avec la flèche Annuler.</div>
+          <p><strong>{importState.count} élèves</strong> ont été reconnus. {importState.pairings ? <><strong>{importState.pairings} appairages</strong> de l’ancien classeur seront également récupérés.</> : 'Les élèves seront prêts à être appariés dans un nouveau scénario.'}</p>
+          <div className="warning-box"><AlertTriangle /> L’import remplacera les données actuelles. Le nouveau format conserve les conditions détaillées ; les anciens classeurs restent importables mais leurs fiches devront être contrôlées. Vous pourrez annuler juste après avec la flèche Annuler.</div>
         </>}
         <footer><button className="secondary-button" onClick={() => setImportState(null)}>Annuler</button>{!importState.error && <button className="primary-button" onClick={() => { actions.replaceWorkspace(importState.next, `Import du fichier ${importState.filename}`); setImportState(null) }}>Importer et vérifier</button>}</footer>
       </section></div>}

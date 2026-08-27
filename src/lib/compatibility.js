@@ -93,7 +93,6 @@ export function evaluatePairing(memberIds, students, rotation = '') {
     if (student.participation === 'host_only') addEssential('fail', `${fullName(student)} ne participe pas au déplacement.`)
     if (student.active === false) addEssential('fail', `${fullName(student)} a été retiré de l’échange.`)
     if (student.status === 'review') addOptional('review', `Fiche de ${fullName(student)} à vérifier.`)
-    if (student.otherInfo || student.notes) addOptional('review', `Autres infos utiles à vérifier pour ${fullName(student)}.`)
   }
 
   if (members.length === 2 && members[0].gender === members[1].gender && ['female', 'male'].includes(members[0].gender)) {

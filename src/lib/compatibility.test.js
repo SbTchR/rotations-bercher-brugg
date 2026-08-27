@@ -83,6 +83,15 @@ describe('evaluatePairing', () => {
     expect(result.conditions.optional.some((item) => item.label.includes('filières privilégiées'))).toBe(true)
   })
 
+  it('keeps other useful information outside matching conditions', () => {
+    const students = [
+      { ...base, id: 'b', side: 'bercher', school: 'VG', className: '11VG1', name: 'Léa Martin', gender: 'female', otherInfo: 'Allergie à signaler.' },
+      { ...base, id: 'r', side: 'brugg', school: 'Sekundarschule', className: 'S1', name: 'Nora Keller', gender: 'female', otherInfo: 'Transport particulier.' },
+    ]
+    const result = evaluatePairing(['b', 'r'], students, 'A')
+    expect(result.conditions.optional.map((item) => item.label).join(' ')).not.toContain('Autres infos utiles')
+  })
+
   it('treats a refused pupil as unavailable without deleting their record', () => {
     const students = [
       { ...base, id: 'b', side: 'bercher', name: 'Léa Martin', gender: 'female', active: false },

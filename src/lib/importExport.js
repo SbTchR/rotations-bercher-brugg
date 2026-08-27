@@ -2,13 +2,70 @@ import * as XLSX from '@e965/xlsx'
 import { normalizeWorkspace } from '../data/demoData.js'
 import { fullName, getCorrespondentStatus, normalizeSchool } from './compatibility.js'
 
-const yes = (value) => String(value || '').trim().toUpperCase() === 'OUI'
+const yes = (value) => value === true || ['OUI', 'YES', '1', 'VRAI'].includes(String(value || '').trim().toUpperCase())
 const clean = (value) => String(value ?? '').trim()
 const gender = (value) => {
   const normalized = clean(value).toLowerCase()
-  if (normalized === 'f') return 'female'
-  if (normalized === 'g' || normalized === 'm') return 'male'
+  if (['f', 'fille', 'female', 'féminin', 'feminin'].includes(normalized)) return 'female'
+  if (['g', 'm', 'garçon', 'garcon', 'male', 'masculin'].includes(normalized)) return 'male'
   return 'unspecified'
+}
+
+const participation = (value) => {
+  const normalized = clean(value).toLowerCase()
+  if (normalized.includes('ne veut pas') || normalized.includes('ne voyage pas') || normalized.includes('accueille uniquement')) return 'host_only'
+  if (normalized.includes('ne peut pas accueillir') || normalized.includes('accueil impossible')) return 'travel_no_host'
+  return 'exchange_and_host'
+}
+
+const conditionType = (value) => {
+  const normalized = clean(value).toLowerCase()
+  if (normalized === 'regular_only' || normalized.includes('correspondant uniquement') || normalized.includes('correspondant actuel uniquement')) return 'regular_only'
+  if (normalized === 'different_only' || normalized.includes('autre personne')) return 'different_only'
+  if (normalized === 'named_only' || normalized.includes('personne précise') || normalized.includes('personne precise')) return 'named_only'
+  return 'none'
+}
+
+const valueFrom = (row, ...keys) => keys.map((key) => row[key]).find((value) => value !== undefined && value !== '') ?? ''
+
+const studentFromModernRow = (row) => {
+  const name = clean(valueFrom(row, 'Nom et prénom', 'Élève'))
+  if (!name) return null
+  const schoolValue = clean(valueFrom(row, 'Établissement', 'Filière'))
+  const className = clean(row.Classe)
+  const side = ['VP', 'VG', 'Bercher'].includes(schoolValue) || /^11V[PG]/i.test(className) ? 'bercher' : 'brugg'
+  const normalizedParticipation = participation(row.Participation)
+  const normalizedCondition = conditionType(valueFrom(row, 'Condition partenaire', 'Condition'))
+  const groupCondition = clean(valueFrom(row, 'Condition de groupe', 'Groupe indispensable')).toUpperCase().match(/(?:GROUPE\s*)?([AB])\b/)?.[1] || ''
+  const normalizedGender = gender(row.Genre)
+  return {
+    id: crypto.randomUUID(),
+    side,
+    name,
+    firstName: '',
+    lastName: '',
+    school: normalizeSchool(schoolValue, className, side),
+    className,
+    gender: normalizedGender,
+    participation: normalizedParticipation,
+    conditionType: normalizedCondition,
+    namedPartner: clean(valueFrom(row, 'Personne demandée', 'Personne précise')),
+    regularCorrespondents: clean(row['Correspondant actuel']),
+    canHost: normalizedParticipation !== 'travel_no_host',
+    acceptsOtherGender: yes(row['Autre sexe accepté']),
+    requiredRotation: groupCondition,
+    active: clean(row['Échange maintenu']).toUpperCase() !== 'NON',
+    otherInfo: clean(row['Autres infos utiles']),
+    notes: '',
+    animals: '',
+    groupPreference: '',
+    studentPhone: clean(row['Téléphone élève']),
+    parentPhone: clean(row['Téléphone parents']),
+    address: clean(row.Adresse),
+    domicile: clean(row.Domicile),
+    sharePhones: true,
+    status: name && className && ['female', 'male'].includes(normalizedGender) && (normalizedCondition !== 'named_only' || clean(valueFrom(row, 'Personne demandée', 'Personne précise'))) ? 'complete' : 'review',
+  }
 }
 
 const studentFromLegacy = (row, side, start) => {
@@ -53,6 +110,19 @@ export async function importLegacyWorkbook(file, currentWorkspace) {
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array' })
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  const modernRows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+  const modernStudents = modernRows.map(studentFromModernRow).filter(Boolean)
+  if (modernStudents.length) {
+    const stamp = new Date().toISOString()
+    const scenarioId = crypto.randomUUID()
+    return normalizeWorkspace({
+      ...currentWorkspace,
+      students: modernStudents,
+      scenarios: [{ id: scenarioId, name: 'Import Excel', status: 'draft', createdAt: stamp, updatedAt: stamp, pairings: [] }],
+      activeScenarioId: scenarioId,
+      activity: [{ id: crypto.randomUUID(), at: stamp, text: `${modernStudents.length} élèves importés depuis le nouveau format Excel.` }],
+    })
+  }
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
   const imported = []
   for (const row of rows.slice(3)) {
@@ -115,8 +185,8 @@ export function exportStudentsXlsx(workspace) {
     host_only: 'Ne voyage pas — peut accueillir',
   }
   const rows = workspace.students.map((student) => ({
-    Élève: fullName(student),
-    Établissement: student.school,
+    'Nom et prénom': fullName(student),
+    Établissement: schoolLabelForExport(student.school),
     Classe: student.className,
     Genre: student.gender,
     Participation: labels[student.participation],
@@ -124,9 +194,9 @@ export function exportStudentsXlsx(workspace) {
     'Autre sexe accepté': student.acceptsOtherGender ? 'OUI' : 'NON',
     'Correspondant actuel': student.regularCorrespondents,
     'Correspondant ajouté': getCorrespondentStatus(student, workspace.students).state === 'found' ? 'OUI' : 'NON',
-    'Condition': student.conditionType,
-    'Personne précise': student.namedPartner,
-    'Condition de groupe': student.requiredRotation ? `Uniquement groupe ${student.requiredRotation}` : 'Aucune',
+    'Condition partenaire': conditionLabelForExport(student.conditionType),
+    'Personne demandée': student.namedPartner,
+    'Condition de groupe': student.requiredRotation || '',
     'Échange maintenu': student.active === false ? 'NON' : 'OUI',
     'Autres infos utiles': student.otherInfo || [student.animals && `Animaux : ${student.animals}`, student.groupPreference && `Souhait de regroupement : ${student.groupPreference}`, student.notes].filter(Boolean).join('\n'),
     'Téléphone élève': student.studentPhone,
@@ -138,6 +208,15 @@ export function exportStudentsXlsx(workspace) {
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Inscriptions')
   XLSX.writeFile(workbook, `inscriptions-${workspace.meta.schoolYear}.xlsx`)
 }
+
+const schoolLabelForExport = (school) => school === 'Bezirksschule' ? 'Bez' : school === 'Sekundarschule' ? 'Sek' : school
+
+const conditionLabelForExport = (condition) => ({
+  none: 'Libre',
+  regular_only: 'Correspondant actuel uniquement',
+  different_only: 'Autre personne que le correspondant',
+  named_only: 'Personne précise uniquement',
+}[condition] || 'Libre')
 
 export function exportScenarioXlsx(workspace, scenario) {
   const byId = new Map(workspace.students.map((student) => [student.id, student]))

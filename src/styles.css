@@ -358,6 +358,18 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .student-inspector-title > div { display: grid; gap: 3px; }
 .student-inspector-title strong { font-size: .84rem; }
 .student-inspector-title small { color: var(--muted); font-size: .62rem; }
+.student-condition-grid { display: grid; gap: 7px; margin: 6px 13px 12px; }
+.student-condition-card { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 9px; min-height: 56px; padding: 8px 9px; border: 1px solid; border-radius: 10px; }
+.student-condition-card .condition-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; }
+.student-condition-card .condition-icon svg { width: 17px; height: 17px; }
+.student-condition-card > div { display: grid; gap: 2px; min-width: 0; }
+.student-condition-card small { font-size: .57rem; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; }
+.student-condition-card strong { font-size: .65rem; line-height: 1.3; }
+.student-condition-card > b { max-width: 74px; padding: 4px 6px; border-radius: 999px; font-size: .51rem; line-height: 1.25; text-align: center; }
+.student-condition-card.clear { color: #317625; border-color: #b8dda5; background: #f7fcf4; }
+.student-condition-card.clear .condition-icon, .student-condition-card.clear > b { background: #e2f3d9; }
+.student-condition-card.attention { color: #ad452e; border-color: #ffb39e; background: #fff7f4; }
+.student-condition-card.attention .condition-icon, .student-condition-card.attention > b { background: #ffe4dc; }
 .condition-summary { display: grid; margin: 6px 13px 12px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .condition-summary > div { display: grid; gap: 3px; padding: 9px 10px; border-bottom: 1px solid var(--border); }
 .condition-summary > div:last-child { border-bottom: 0; }
@@ -372,6 +384,8 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .correspondent-card.missing { color: #b65031; border-color: #ffc1b0; background: #fff9f7; }
 .student-extra-details { margin: 12px 13px; padding-top: 11px; border-top: 1px solid var(--border); }
 .student-extra-details p { display: grid; gap: 3px; margin: 7px 0; font-size: .64rem; }
+.suggestion-result { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid #a8d7de; border-radius: 9px; color: var(--teal-dark); background: var(--teal-soft); font-size: .7rem; }
+.suggestion-result > svg { width: 18px; height: 18px; }
 .student-extra-details p span { color: var(--muted); }
 .confidential-detail { padding: 8px; border-radius: 7px; background: #f5f9fc; }
 
