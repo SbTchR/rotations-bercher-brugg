@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createDemoWorkspace } from '../data/demoData'
+import { fullName } from '../lib/compatibility'
 import { cloudEnabled, getSession, loadWorkspace, saveWorkspace, signInWithCredentials, signOut } from '../lib/storage'
 
 const WorkspaceContext = createContext(null)
@@ -117,10 +118,10 @@ export function WorkspaceProvider({ children }) {
       commit(createDemoWorkspace(), 'Données de démonstration restaurées')
     },
     addStudent(student) {
-      commit((current) => ({ ...current, students: [...current.students, student] }), `Fiche ajoutée: ${student.firstName} ${student.lastName}`.trim())
+      commit((current) => ({ ...current, students: [...current.students, student] }), `Fiche ajoutée: ${fullName(student)}`.trim())
     },
     updateStudent(student) {
-      commit((current) => ({ ...current, students: current.students.map((item) => item.id === student.id ? student : item) }), `Fiche mise à jour: ${student.firstName} ${student.lastName}`.trim())
+      commit((current) => ({ ...current, students: current.students.map((item) => item.id === student.id ? student : item) }), `Fiche mise à jour: ${fullName(student)}`.trim())
     },
     removeStudent(studentId) {
       commit((current) => ({

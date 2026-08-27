@@ -5,11 +5,13 @@ Webapp privée de préparation des inscriptions et appairages pour les échanges
 ## Ce que l’outil gère
 
 - saisie rapide des bulletins et import du classeur historique à deux tableaux;
+- distinction VP/VG à Bercher et Bez/Sek à Brugg, avec préférence souple pour VP ↔ Bez et VG ↔ Sek;
+- un seul champ Nom et prénom, genre obligatoire, et participation en trois états (voyage et accueille, voyage sans accueillir, accueille sans voyager);
 - uniquement les élèves qui participent, avec indication simple de l’accueil possible ou impossible;
 - nom du correspondant actuel et détection automatique de sa présence dans l’application;
 - correspondant actuel, autre partenaire, personne imposée ou choix libre;
 - préférence non bloquante VP ↔ Bezirksschule et VG ↔ Sekundarschule;
-- autre sexe, animaux, rotations A/B et remarques confidentielles;
+- autre sexe, rotations A/B et un champ unique « Autres infos utiles »;
 - binômes et groupes à trois, score expliqué, conflits bloquants et avertissements;
 - blocs A/B bien séparés et bilan des départs, arrivées et soldes pour chaque classe et chaque partie de semaine;
 - scénarios indépendants, verrouillage, annuler/rétablir, export Excel, impression et sauvegarde JSON;

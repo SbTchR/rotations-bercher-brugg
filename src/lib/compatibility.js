@@ -1,4 +1,26 @@
-export const fullName = (student) => [student?.firstName, student?.lastName].filter(Boolean).join(' ').trim()
+export const fullName = (student) => student?.name?.trim() || [student?.firstName, student?.lastName].filter(Boolean).join(' ').trim()
+
+export const schoolLabels = {
+  VP: 'VP · Bercher',
+  VG: 'VG · Bercher',
+  Bezirksschule: 'Bez · Brugg',
+  Sekundarschule: 'Sek · Brugg',
+  Bercher: 'Bercher',
+}
+
+export const schoolLabel = (school) => schoolLabels[school] || school || 'Établissement non renseigné'
+
+export function normalizeSchool(school, className = '', side = '') {
+  const value = String(school || '').trim()
+  if (side === 'bercher' || value === 'Bercher' || value === 'VP' || value === 'VG') {
+    if (value === 'VP' || /VP/i.test(className)) return 'VP'
+    if (value === 'VG' || /VG/i.test(className)) return 'VG'
+    return 'Bercher'
+  }
+  if (value === 'Bez' || value === 'Bezirksschule' || /^B/i.test(className)) return 'Bezirksschule'
+  if (value === 'Sek' || value === 'Sekundarschule' || /^S/i.test(className)) return 'Sekundarschule'
+  return value
+}
 
 const normalized = (value = '') => value
   .normalize('NFD')
@@ -28,8 +50,8 @@ export function getCorrespondentStatus(student, students) {
 export function getTrack(student) {
   if (!student) return ''
   if (student.side === 'bercher') {
-    if (/VP/i.test(student.className || '')) return 'bezirk'
-    if (/VG/i.test(student.className || '')) return 'sekundar'
+    if (student.school === 'VP' || /VP/i.test(student.className || '')) return 'bezirk'
+    if (student.school === 'VG' || /VG/i.test(student.className || '')) return 'sekundar'
   }
   if (student.school === 'Bezirksschule' || /^\s*B/i.test(student.className || '')) return 'bezirk'
   if (student.school === 'Sekundarschule' || /^\s*S/i.test(student.className || '')) return 'sekundar'
@@ -38,8 +60,8 @@ export function getTrack(student) {
 
 export function getTrackLabel(student) {
   const track = getTrack(student)
-  if (track === 'bezirk') return student.side === 'bercher' ? 'VP · préférence Bezirks' : 'Bezirks · préférence VP'
-  if (track === 'sekundar') return student.side === 'bercher' ? 'VG · préférence Sekundar' : 'Sekundar · préférence VG'
+  if (track === 'bezirk') return student.side === 'bercher' ? 'VP · préférence Bez' : 'Bez · préférence VP'
+  if (track === 'sekundar') return student.side === 'bercher' ? 'VG · préférence Sek' : 'Sek · préférence VG'
   return 'Filière non reconnue'
 }
 
@@ -76,6 +98,8 @@ export function evaluatePairing(memberIds, students) {
     const regular = normalized(student.regularCorrespondents)
     const named = normalized(student.namedPartner)
 
+    if (student.participation === 'host_only') conflicts.push(`${fullName(student)} ne participe pas au déplacement.`)
+
     if (!student.acceptsOtherGender && student.gender !== 'unspecified') {
       const mismatch = opposite.some((item) => item.gender !== 'unspecified' && item.gender !== student.gender)
       if (mismatch) conflicts.push(`${fullName(student)} n’accepte pas un partenaire d’un autre sexe.`)
@@ -96,7 +120,7 @@ export function evaluatePairing(memberIds, students) {
     }
     if (student.conditionType === 'different_only' && !regular) warnings.push(`Correspondant actuel non renseigné pour ${fullName(student)} : la demande d’un autre partenaire ne peut pas être vérifiée.`)
     if (student.conditionType === 'none') respected.push(`${fullName(student)} est libre quant au choix du partenaire`)
-    if (student.notes) warnings.push(`Remarque confidentielle à vérifier pour ${fullName(student)}.`)
+    if (student.otherInfo || student.notes) warnings.push(`Autres infos utiles à vérifier pour ${fullName(student)}.`)
     if (student.status === 'review') warnings.push(`Fiche incomplète pour ${fullName(student)}.`)
   }
 
@@ -114,7 +138,7 @@ export function evaluatePairing(memberIds, students) {
 export function scenarioStats(scenario, students) {
   const studentIds = new Set(students.map((student) => student.id))
   const assigned = new Set(scenario.pairings.flatMap((pairing) => pairing.memberIds).filter((id) => studentIds.has(id)))
-  const eligible = students
+  const eligible = students.filter((student) => student.participation !== 'host_only')
   const alertCount = scenario.pairings.filter((pairing) => evaluatePairing(pairing.memberIds, students).conflicts.length).length
   const groupA = scenario.pairings.filter((pairing) => pairing.rotation === 'A').length
   const groupB = scenario.pairings.filter((pairing) => pairing.rotation === 'B').length

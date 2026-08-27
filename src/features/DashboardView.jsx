@@ -1,6 +1,6 @@
 import { AlertTriangle, ArrowLeftRight, CheckCircle2, ClipboardList, Cloud, Database, UsersRound } from 'lucide-react'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { evaluatePairing, scenarioStats } from '../lib/compatibility'
+import { evaluatePairing, scenarioStats, schoolLabel } from '../lib/compatibility'
 
 export default function DashboardView({ onNavigate }) {
   const { workspace, cloudEnabled } = useWorkspace()
@@ -9,7 +9,8 @@ export default function DashboardView({ onNavigate }) {
   const incomplete = workspace.students.filter((student) => student.status === 'review').length
   const hardConflicts = scenario.pairings.reduce((sum, pairing) => sum + evaluatePairing(pairing.memberIds, workspace.students).conflicts.length, 0)
   const schools = [
-    ['Bercher', workspace.students.filter((student) => student.school === 'Bercher').length],
+    ['VP', workspace.students.filter((student) => student.school === 'VP').length],
+    ['VG', workspace.students.filter((student) => student.school === 'VG').length],
     ['Bezirksschule', workspace.students.filter((student) => student.school === 'Bezirksschule').length],
     ['Sekundarschule', workspace.students.filter((student) => student.school === 'Sekundarschule').length],
   ]
@@ -22,8 +23,8 @@ export default function DashboardView({ onNavigate }) {
       </section>
       <div className="dashboard-columns">
         <section className="open-panel">
-          <header><div><h2>Inscriptions par établissement</h2><p>Élèves présents dans l’espace de travail</p></div><button className="text-button" onClick={() => onNavigate('students')}>Ouvrir</button></header>
-          <div className="school-bars">{schools.map(([name, count]) => <div key={name}><span><b>{name}</b><strong>{count}</strong></span><i><b style={{ width: `${Math.max(8, (count / Math.max(...schools.map((item) => item[1]), 1)) * 100)}%` }} /></i></div>)}</div>
+          <header><div><h2>Inscriptions par filière</h2><p>Élèves présents dans l’espace de travail</p></div><button className="text-button" onClick={() => onNavigate('students')}>Ouvrir</button></header>
+          <div className="school-bars">{schools.map(([name, count]) => <div key={name}><span><b>{schoolLabel(name)}</b><strong>{count}</strong></span><i><b style={{ width: `${Math.max(8, (count / Math.max(...schools.map((item) => item[1]), 1)) * 100)}%` }} /></i></div>)}</div>
         </section>
         <section className="open-panel next-actions">
           <header><div><h2>À traiter maintenant</h2><p>Les contrôles les plus utiles</p></div></header>

@@ -1,6 +1,6 @@
 import * as XLSX from '@e965/xlsx'
 import { normalizeWorkspace } from '../data/demoData.js'
-import { getCorrespondentStatus } from './compatibility.js'
+import { fullName, getCorrespondentStatus, normalizeSchool } from './compatibility.js'
 
 const yes = (value) => String(value || '').trim().toUpperCase() === 'OUI'
 const clean = (value) => String(value ?? '').trim()
@@ -15,13 +15,13 @@ const studentFromLegacy = (row, side, start) => {
   const name = clean(row[start + 1])
   if (!name) return null
   const parts = name.split(/\s+/)
-  const firstName = parts.shift() || ''
   return {
     id: crypto.randomUUID(),
     side,
-    firstName,
-    lastName: parts.join(' '),
-    school: side === 'bercher' ? 'Bercher' : clean(row[start + 2]).toUpperCase().startsWith('S') ? 'Sekundarschule' : 'Bezirksschule',
+    name,
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' '),
+    school: normalizeSchool(side === 'bercher' ? '' : clean(row[start + 2]), clean(row[start + 2]), side),
     className: clean(row[start + 2]),
     gender: gender(row[start]),
     participation: 'exchange_and_host',
@@ -37,6 +37,7 @@ const studentFromLegacy = (row, side, start) => {
     studentPhone: '',
     parentPhone: '',
     address: '',
+    domicile: '',
     sharePhones: true,
     status: 'review',
     assignmentHint: clean(row[start + 7]),
@@ -44,7 +45,7 @@ const studentFromLegacy = (row, side, start) => {
   }
 }
 
-const normalizedName = (student) => `${student.firstName} ${student.lastName}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+const normalizedName = (student) => fullName(student).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
 export async function importLegacyWorkbook(file, currentWorkspace) {
   const buffer = await file.arrayBuffer()
@@ -109,9 +110,10 @@ export function exportStudentsXlsx(workspace) {
   const labels = {
     exchange_and_host: 'Participe — accueil possible',
     travel_no_host: 'Participe — accueil impossible',
+    host_only: 'Ne voyage pas — peut accueillir',
   }
   const rows = workspace.students.map((student) => ({
-    Élève: `${student.firstName} ${student.lastName}`.trim(),
+    Élève: fullName(student),
     Établissement: student.school,
     Classe: student.className,
     Genre: student.gender,
@@ -123,11 +125,11 @@ export function exportStudentsXlsx(workspace) {
     'Condition': student.conditionType,
     'Personne précise': student.namedPartner,
     Rotation: student.rotation,
-    Animaux: student.animals,
-    Remarques: student.notes,
+    'Autres infos utiles': student.otherInfo || [student.animals && `Animaux : ${student.animals}`, student.groupPreference && `Souhait de regroupement : ${student.groupPreference}`, student.notes].filter(Boolean).join('\n'),
     'Téléphone élève': student.studentPhone,
     'Téléphone parents': student.parentPhone,
     Adresse: student.address,
+    Domicile: student.domicile,
   }))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Inscriptions')
@@ -140,8 +142,8 @@ export function exportScenarioXlsx(workspace, scenario) {
     const members = pairing.memberIds.map((id) => byId.get(id)).filter(Boolean)
     return {
       Groupe: index + 1,
-      Bercher: members.filter((student) => student.side === 'bercher').map((student) => `${student.firstName} ${student.lastName}`.trim()).join(' + '),
-      Brugg: members.filter((student) => student.side === 'brugg').map((student) => `${student.firstName} ${student.lastName}`.trim()).join(' + '),
+      Bercher: members.filter((student) => student.side === 'bercher').map(fullName).join(' + '),
+      Brugg: members.filter((student) => student.side === 'brugg').map(fullName).join(' + '),
       Rotation: pairing.rotation,
       'Classe d’accueil à Bercher': pairing.bercherHostClass || members.find((student) => student.side === 'bercher')?.className || '',
       'Classe d’accueil à Brugg': pairing.bruggHostClass || members.find((student) => student.side === 'brugg')?.className || '',

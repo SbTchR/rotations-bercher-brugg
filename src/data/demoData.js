@@ -1,11 +1,14 @@
 const now = '2026-08-26T18:00:00.000Z'
 
+import { normalizeSchool } from '../lib/compatibility'
+
 const student = (id, side, suffix, values = {}) => ({
   id,
   side,
+  name: `Élève ${suffix}`,
   firstName: 'Élève',
   lastName: suffix,
-  school: side === 'bercher' ? 'Bercher' : values.school || 'Bezirksschule',
+  school: normalizeSchool(values.school || '', values.className || '', side),
   className: values.className || (side === 'bercher' ? '11VG1' : 'B3a'),
   gender: values.gender || 'unspecified',
   participation: values.participation || 'exchange_and_host',
@@ -18,9 +21,11 @@ const student = (id, side, suffix, values = {}) => ({
   rotation: values.rotation || '',
   groupPreference: values.groupPreference || '',
   notes: values.notes || '',
+  otherInfo: values.otherInfo || '',
   studentPhone: '',
   parentPhone: '',
   address: '',
+  domicile: '',
   sharePhones: true,
   status: values.status || 'complete',
   assignmentHint: values.assignmentHint || '',
@@ -104,9 +109,10 @@ export const createBlankWorkspace = () => {
 }
 
 export const blankStudent = (side = 'bercher') => student(crypto.randomUUID(), side, '', {
+  name: '',
   firstName: '',
   lastName: '',
-  school: side === 'bercher' ? 'Bercher' : 'Bezirksschule',
+  school: side === 'bercher' ? 'VP' : 'Bezirksschule',
   className: '',
   canHost: true,
   status: 'review',
@@ -119,7 +125,21 @@ export const normalizeWorkspace = (value) => {
     ...demo,
     ...value,
     meta: { ...demo.meta, ...(value.meta || {}) },
-    students: value.students,
+    students: value.students.map((student) => {
+      const name = student.name?.trim() || [student.firstName, student.lastName].filter(Boolean).join(' ').trim()
+      const otherInfo = student.otherInfo?.trim() || [student.animals && `Animaux : ${student.animals}`, student.groupPreference && `Souhait de regroupement : ${student.groupPreference}`, student.notes].filter(Boolean).join('\n')
+      return {
+        ...student,
+        name,
+        school: normalizeSchool(student.school, student.className, student.side),
+        gender: student.gender === 'female' || student.gender === 'male' ? student.gender : 'unspecified',
+        participation: student.participation || (student.canHost === false ? 'travel_no_host' : 'exchange_and_host'),
+        otherInfo,
+        address: student.address || '',
+        domicile: student.domicile || '',
+        sharePhones: true,
+      }
+    }),
     scenarios: value.scenarios.length ? value.scenarios : demo.scenarios,
     activeScenarioId: value.activeScenarioId || value.scenarios[0]?.id || demo.activeScenarioId,
     activity: Array.isArray(value.activity) ? value.activity : [],

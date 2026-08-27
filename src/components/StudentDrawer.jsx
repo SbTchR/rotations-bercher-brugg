@@ -1,10 +1,11 @@
-import { CheckCircle2, CircleDashed, LockKeyhole, X } from 'lucide-react'
+import { CheckCircle2, CircleDashed, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { fullName, getCorrespondentStatus } from '../lib/compatibility'
 
 const participationOptions = [
   ['exchange_and_host', 'Participe et peut accueillir'],
-  ['travel_no_host', 'Participe — accueil impossible'],
+  ['travel_no_host', 'Aimerait participer mais ne peut pas accueillir'],
+  ['host_only', 'Ne veut pas aller mais peut accueillir'],
 ]
 
 const conditionOptions = [
@@ -22,7 +23,7 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
   const update = (key, value) => setDraft((current) => ({ ...current, [key]: value }))
   const submit = (event) => {
     event.preventDefault()
-    const complete = draft.firstName && draft.lastName && draft.school && draft.className
+    const complete = draft.name?.trim() && draft.school && draft.className && ['female', 'male'].includes(draft.gender) && draft.participation
       && (draft.conditionType !== 'named_only' || draft.namedPartner)
       && (draft.conditionType !== 'different_only' || draft.regularCorrespondents)
     onSave({ ...draft, status: complete ? 'complete' : 'review' })
@@ -37,23 +38,22 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
           <section>
             <h3>Identité</h3>
             <div className="form-grid two-cols">
-              <label>Prénom<input required value={draft.firstName} onChange={(event) => update('firstName', event.target.value)} /></label>
-              <label>Nom<input required value={draft.lastName} onChange={(event) => update('lastName', event.target.value)} /></label>
+              <label className="span-two">Nom et prénom<input required value={draft.name || ''} onChange={(event) => update('name', event.target.value)} placeholder="Nom et prénom de l’élève" /></label>
               <label>Établissement
-                <select value={draft.school} onChange={(event) => { const school = event.target.value; update('school', school); update('side', school === 'Bercher' ? 'bercher' : 'brugg') }}>
-                  <option>Bercher</option><option>Bezirksschule</option><option>Sekundarschule</option>
+                <select value={draft.school} onChange={(event) => { const school = event.target.value; update('school', school); update('side', ['VP', 'VG'].includes(school) ? 'bercher' : 'brugg') }}>
+                  <option value="VP">VP · Bercher</option><option value="VG">VG · Bercher</option><option value="Bezirksschule">Bez · Brugg</option><option value="Sekundarschule">Sek · Brugg</option>
                 </select>
               </label>
-              <label>Classe<input required value={draft.className} onChange={(event) => update('className', event.target.value)} placeholder="11VG1 / B3a / S3b" /></label>
+              <label>Classe<input required value={draft.className} onChange={(event) => update('className', event.target.value)} placeholder="11VP1 / 11VG1 / B1 / S1" /></label>
             </div>
             <fieldset className="inline-options"><legend>Genre</legend>
-              {[['female', 'Fille'], ['male', 'Garçon'], ['unspecified', 'Non renseigné']].map(([value, label]) => <label key={value}><input type="radio" name="gender" checked={draft.gender === value} onChange={() => update('gender', value)} /> {label}</label>)}
+              {[['female', 'Fille'], ['male', 'Garçon']].map(([value, label]) => <label key={value}><input required type="radio" name="gender" checked={draft.gender === value} onChange={() => update('gender', value)} /> {label}</label>)}
             </fieldset>
           </section>
 
           <section className="correspondent-section">
             <h3>Correspondant actuel</h3>
-            <label>Nom du correspondant<input value={draft.regularCorrespondents} onChange={(event) => update('regularCorrespondents', event.target.value)} placeholder="Prénom et nom" /></label>
+            <label>Nom du correspondant habituel<input value={draft.regularCorrespondents} onChange={(event) => update('regularCorrespondents', event.target.value)} placeholder="Nom et prénom" /></label>
             {correspondent.state === 'found' ? (
               <div className="correspondent-state found"><CheckCircle2 /><span><strong>Déjà ajouté dans l’application</strong><small>{fullName(correspondent.student)} · {correspondent.student.className}</small></span></div>
             ) : correspondent.state === 'missing' ? (
@@ -65,14 +65,14 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
 
           <section>
             <h3>Participation</h3>
-            <div className="segmented two">
+            <div className="segmented three">
               {participationOptions.map(([value, label]) => <button type="button" key={value} className={draft.participation === value ? 'active' : ''} onClick={() => setDraft((current) => ({
                 ...current,
                 participation: value,
-                canHost: value === 'exchange_and_host',
+                canHost: value !== 'travel_no_host',
               }))}>{label}</button>)}
             </div>
-            <p className="field-help">Seuls les élèves qui participent à l’échange sont ajoutés ici. La possibilité d’accueillir reste une information et ne bloque jamais un appairage.</p>
+            <p className="field-help">Les élèves qui ne voyagent pas peuvent tout de même être enregistrés comme accueillants.</p>
           </section>
 
           <section>
@@ -94,11 +94,8 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
           </section>
 
           <section>
-            <h3>Contraintes utiles</h3>
-            <label>Animaux à domicile<input value={draft.animals} onChange={(event) => update('animals', event.target.value)} placeholder="Aucun, chats, chien…" /></label>
-            <label>Préférence de groupe<input value={draft.groupPreference} onChange={(event) => update('groupPreference', event.target.value)} placeholder="Souhaite être avec…" /></label>
-            <label>Commentaires confidentiels<textarea rows="4" value={draft.notes} onChange={(event) => update('notes', event.target.value)} placeholder="Allergies, santé, craintes, informations de placement…" /></label>
-            <div className="privacy-note"><LockKeyhole size={16} /> Visible uniquement par les responsables autorisés.</div>
+            <h3>Autres infos utiles</h3>
+            <label>Autres infos utiles<textarea rows="5" value={draft.otherInfo ?? draft.notes ?? ''} onChange={(event) => update('otherInfo', event.target.value)} placeholder="Allergies, animaux, souhaits, craintes, informations de placement…" /></label>
           </section>
 
           <section>
@@ -107,8 +104,8 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
               <label>N° de l’élève<input value={draft.studentPhone} onChange={(event) => update('studentPhone', event.target.value)} /></label>
               <label>N° des parents<input value={draft.parentPhone} onChange={(event) => update('parentPhone', event.target.value)} /></label>
             </div>
-            <label>Adresse complète<input value={draft.address} onChange={(event) => update('address', event.target.value)} /></label>
-            <label className="toggle-label"><input type="checkbox" checked={draft.sharePhones} onChange={(event) => update('sharePhones', event.target.checked)} /> Autorisation de partager les numéros avec les familles participantes</label>
+            <label>Adresse<input value={draft.address} onChange={(event) => update('address', event.target.value)} placeholder="Rue et numéro" /></label>
+            <label>Domicile<input value={draft.domicile || ''} onChange={(event) => update('domicile', event.target.value)} placeholder="Village / commune" /></label>
           </section>
 
           <footer><button type="button" className="secondary-button" onClick={onClose}>Annuler</button><button className="primary-button">Enregistrer</button></footer>

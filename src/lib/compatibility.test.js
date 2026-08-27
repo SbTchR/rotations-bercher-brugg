@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluatePairing, getCorrespondentStatus } from './compatibility.js'
+import { evaluatePairing, fullName, getCorrespondentStatus, normalizeSchool, scenarioStats } from './compatibility.js'
 
 const base = { participation: 'exchange_and_host', canHost: true, acceptsOtherGender: true, conditionType: 'none', rotation: 'A', notes: '', status: 'complete' }
 
@@ -45,5 +45,22 @@ describe('evaluatePairing', () => {
     ]
     expect(getCorrespondentStatus(students[0], students).state).toBe('found')
     expect(getCorrespondentStatus({ ...students[0], regularCorrespondents: 'Personne absente' }, students).state).toBe('missing')
+  })
+
+  it('recognizes the four school tracks and the single-name format', () => {
+    expect(normalizeSchool('Bercher', '11VP2', 'bercher')).toBe('VP')
+    expect(normalizeSchool('Bercher', '11VG1', 'bercher')).toBe('VG')
+    expect(normalizeSchool('', 'B2', 'brugg')).toBe('Bezirksschule')
+    expect(normalizeSchool('', 'S2', 'brugg')).toBe('Sekundarschule')
+    expect(fullName({ name: 'Léa Müller', firstName: 'Ancien', lastName: 'Format' })).toBe('Léa Müller')
+  })
+
+  it('does not count host-only pupils as pupils to place', () => {
+    const students = [
+      { ...base, id: 'b', side: 'bercher', participation: 'host_only', name: 'Hôte Bercher', gender: 'female' },
+      { ...base, id: 'r', side: 'brugg', name: 'Voyageur Brugg', gender: 'male' },
+    ]
+    expect(scenarioStats({ pairings: [] }, students).unassigned).toBe(1)
+    expect(evaluatePairing(['b', 'r'], students).conflicts.join(' ')).toContain('ne participe pas au déplacement')
   })
 })

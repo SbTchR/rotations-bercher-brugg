@@ -42,8 +42,8 @@ export function calculateClassBalances(scenario, students) {
     const bercherTravelHalf = pairing.rotation === 'A' ? 'first' : 'second'
     const bruggTravelHalf = pairing.rotation === 'A' ? 'second' : 'first'
 
-    for (const student of bercher) ensureStudentClass(student)[bercherTravelHalf].outgoing += 1
-    for (const student of brugg) ensureStudentClass(student)[bruggTravelHalf].outgoing += 1
+    for (const student of bercher) if (student.participation !== 'host_only') ensureStudentClass(student)[bercherTravelHalf].outgoing += 1
+    for (const student of brugg) if (student.participation !== 'host_only') ensureStudentClass(student)[bruggTravelHalf].outgoing += 1
     bruggHost[bercherTravelHalf].incoming += bercher.length
     bercherHost[bruggTravelHalf].incoming += brugg.length
   }

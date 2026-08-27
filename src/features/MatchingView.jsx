@@ -24,6 +24,7 @@ import {
   fullName,
   getCorrespondentStatus,
   getTrackLabel,
+  schoolLabel,
   scenarioStats,
 } from '../lib/compatibility'
 
@@ -53,12 +54,13 @@ function StudentRow({ student, assigned, selected, inspected, onSelect }) {
   if (student.conditionType === 'different_only') cues.push('autre personne')
   if (student.conditionType === 'named_only') cues.push('personne précise')
   if (!student.acceptsOtherGender) cues.push('même sexe uniquement')
+  if (student.participation === 'host_only') cues.push('accueille seulement')
   if (student.status === 'review') cues.push('fiche à vérifier')
   return (
     <button className={`student-row ${selected ? 'selected' : ''} ${inspected ? 'inspected' : ''} ${assigned ? 'assigned' : ''}`} onClick={() => onSelect(student)} aria-pressed={selected}>
       <span className="selection-box">{selected ? <Check size={14} /> : assigned ? <Lock size={13} /> : null}</span>
       <span className={`gender-mark ${student.gender}`}>{genderSymbol[student.gender]}</span>
-      <span className="student-row-main"><strong>{fullName(student)}</strong><small>{student.className}</small>{cues[0] && <em>• {cues[0]}</em>}</span>
+      <span className="student-row-main"><strong>{fullName(student)}</strong><small>{schoolLabel(student.school)} · {student.className}</small>{cues[0] && <em>• {cues[0]}</em>}</span>
       <span className="rotation-letter">{student.rotation || '–'}</span>
     </button>
   )
@@ -70,14 +72,14 @@ function StudentRail({ title, side, students, assigned, selectedIds, inspectedId
   const [school, setSchool] = useState('all')
   const items = students.filter((student) => {
     const matchText = `${fullName(student)} ${student.className}`.toLowerCase().includes(query.toLowerCase())
-    const matchFilter = filter === 'all' || (filter === 'unassigned' ? !assigned.has(student.id) : student.status === 'review' || student.notes)
-    const matchSchool = side === 'bercher' || school === 'all' || student.school === school
+    const matchFilter = filter === 'all' || (filter === 'unassigned' ? !assigned.has(student.id) : student.status === 'review' || student.otherInfo || student.notes)
+    const matchSchool = school === 'all' || student.school === school
     return matchText && matchFilter && matchSchool
   })
   const grouped = groupByClass(items)
   return (
     <section className="student-rail">
-      <header><h2>{title}</h2>{side === 'brugg' && <select value={school} onChange={(event) => setSchool(event.target.value)} aria-label="Établissement de Brugg"><option value="all">Tous les établissements</option><option>Bezirksschule</option><option>Sekundarschule</option></select>}</header>
+      <header><h2>{title}</h2><select value={school} onChange={(event) => setSchool(event.target.value)} aria-label={`Filière de ${title}`}><option value="all">Toutes les filières</option>{side === 'bercher' ? <><option value="VP">VP · Bercher</option><option value="VG">VG · Bercher</option></> : <><option value="Bezirksschule">Bez · Brugg</option><option value="Sekundarschule">Sek · Brugg</option></>}</select></header>
       <label className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher…" /></label>
       <div className="mini-tabs"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>Tous</button><button className={filter === 'unassigned' ? 'active' : ''} onClick={() => setFilter('unassigned')}>À placer</button><button className={filter === 'attention' ? 'active' : ''} onClick={() => setFilter('attention')}>Attention</button></div>
       <div className="student-list">{grouped.map(([className, classStudents]) => <section className="rail-class-group" key={className}><header><strong>{className}</strong><span>{classStudents.length}</span></header>{classStudents.map((student) => <StudentRow key={student.id} student={student} assigned={assigned.has(student.id)} selected={selectedIds.has(student.id)} inspected={inspectedId === student.id} onSelect={onSelect} />)}</section>)}{!items.length && <p className="empty-note">Aucun élève dans ce filtre.</p>}</div>
@@ -117,11 +119,11 @@ function StudentInspector({ student, students, onClose }) {
         <div><span>Rotation</span><strong className="rotation-value">{student.rotation ? `Groupe ${student.rotation}` : 'À décider'}</strong></div>
         <div><span>Choix du partenaire</span><strong>{conditionLabels[student.conditionType] || 'Libre'}</strong></div>
         <div><span>Partenaire d’un autre sexe</span><strong>{student.acceptsOtherGender ? 'Accepté' : 'Non accepté'}</strong></div>
-        <div><span>Accueil</span><strong>{student.canHost ? 'Possible' : 'Impossible · information seulement'}</strong></div>
+        <div><span>Participation</span><strong>{student.participation === 'host_only' ? 'N’accueille que des visiteurs' : student.canHost ? 'Participe et peut accueillir' : 'Participe sans pouvoir accueillir'}</strong></div>
       </section>
       <section className={`correspondent-card ${correspondent.state}`}><Link2 /><div><span>Correspondant actuel</span><strong>{correspondent.name || 'Non renseigné'}</strong><small>{correspondent.state === 'found' ? `Ajouté · ${fullName(correspondent.student)} (${correspondent.student.className})` : correspondent.state === 'missing' ? 'Pas encore ajouté dans l’application' : 'L’élève reste libre si aucune condition ne l’impose.'}</small></div></section>
       {student.conditionType === 'named_only' && <section className={`correspondent-card ${requested ? 'found' : 'missing'}`}><UserPlus /><div><span>Personne demandée</span><strong>{student.namedPartner || 'Non renseignée'}</strong><small>{requested ? `Ajoutée · ${fullName(requested)} (${requested.className})` : 'Pas encore ajoutée dans l’application'}</small></div></section>}
-      {(student.groupPreference || student.animals || student.notes) && <section className="student-extra-details"><h3>Autres informations</h3>{student.groupPreference && <p><strong>Souhait de regroupement</strong><span>{student.groupPreference}</span></p>}{student.animals && <p><strong>Animaux</strong><span>{student.animals}</span></p>}{student.notes && <p className="confidential-detail"><strong>Remarque confidentielle</strong><span>{student.notes}</span></p>}</section>}
+      {(student.otherInfo || student.notes || student.groupPreference || student.animals) && <section className="student-extra-details"><h3>Autres infos utiles</h3><p className="confidential-detail"><span>{student.otherInfo || [student.animals, student.groupPreference, student.notes].filter(Boolean).join('\n')}</span></p></section>}
     </aside>
   )
 }
@@ -207,7 +209,7 @@ export default function MatchingView() {
   const selectStudent = (student) => {
     setSelectedStudentId(student.id)
     setSelectedPairingId(null)
-    if (assigned.has(student.id)) return
+    if (assigned.has(student.id) || student.participation === 'host_only') return
     setSelectedIds((current) => {
       const next = new Set(current)
       if (next.has(student.id)) next.delete(student.id)
@@ -229,8 +231,8 @@ export default function MatchingView() {
     selectPairing(pairingId)
   }
   const suggest = () => {
-    const left = workspace.students.filter((student) => student.side === 'bercher' && !assigned.has(student.id))
-    const right = workspace.students.filter((student) => student.side === 'brugg' && !assigned.has(student.id))
+    const left = workspace.students.filter((student) => student.side === 'bercher' && student.participation !== 'host_only' && !assigned.has(student.id))
+    const right = workspace.students.filter((student) => student.side === 'brugg' && student.participation !== 'host_only' && !assigned.has(student.id))
     const candidates = left.flatMap((a) => right.map((b) => ({ ids: [a.id, b.id], result: evaluatePairing([a.id, b.id], workspace.students) })))
       .sort((a, b) => a.result.conflicts.length - b.result.conflicts.length || b.result.score - a.result.score)
     if (!candidates[0]) return

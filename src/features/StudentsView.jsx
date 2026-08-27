@@ -3,11 +3,12 @@ import { useMemo, useRef, useState } from 'react'
 import StudentDrawer from '../components/StudentDrawer'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { blankStudent } from '../data/demoData'
-import { fullName, getCorrespondentStatus } from '../lib/compatibility'
+import { fullName, getCorrespondentStatus, schoolLabel } from '../lib/compatibility'
 
 const participationLabel = {
   exchange_and_host: 'Accueil possible',
   travel_no_host: 'Participe — accueil impossible',
+  host_only: 'N’accueille que des visiteurs',
 }
 
 const naturalCompare = (left, right) => left.localeCompare(right, 'fr-CH', { numeric: true, sensitivity: 'base' })
@@ -23,7 +24,7 @@ export default function StudentsView() {
   const fileRef = useRef(null)
 
   const filtered = useMemo(() => workspace.students.filter((student) => {
-    const text = `${student.firstName} ${student.lastName} ${student.className}`.toLowerCase()
+    const text = `${fullName(student)} ${student.className} ${schoolLabel(student.school)}`.toLowerCase()
     return (school === 'all' || student.school === school)
       && (status === 'all' || student.status === status)
       && text.includes(query.toLowerCase())
@@ -75,7 +76,7 @@ export default function StudentsView() {
 
       <section className="table-surface">
         <div className="filter-tabs" role="tablist">
-          {[['all', 'Tous'], ['Bercher', 'Bercher'], ['Bezirksschule', 'Bezirksschule'], ['Sekundarschule', 'Sekundarschule']].map(([value, label]) => (
+          {[['all', 'Tous'], ['VP', 'VP · Bercher'], ['VG', 'VG · Bercher'], ['Bezirksschule', 'Bez · Brugg'], ['Sekundarschule', 'Sek · Brugg']].map(([value, label]) => (
             <button key={value} className={school === value ? 'active' : ''} onClick={() => setSchool(value)}>{label}</button>
           ))}
         </div>
@@ -89,13 +90,13 @@ export default function StudentsView() {
             <thead><tr><th aria-label="Sélection" /><th>Élève</th><th>Établissement</th><th>Classe</th><th>Correspondant</th><th>Accueil</th><th>Condition</th><th>Rotation</th><th>État</th><th /></tr></thead>
             <tbody>
               {grouped.flatMap((group) => [
-                <tr className="class-group-row" key={`${group.key}-heading`}><td colSpan="10"><strong>{group.className}</strong><span>{group.school} · {group.students.length} élève{group.students.length > 1 ? 's' : ''}</span></td></tr>,
+                <tr className="class-group-row" key={`${group.key}-heading`}><td colSpan="10"><strong>{group.className}</strong><span>{schoolLabel(group.school)} · {group.students.length} élève{group.students.length > 1 ? 's' : ''}</span></td></tr>,
                 ...group.students.map((student) => {
                   const correspondent = getCorrespondentStatus(student, workspace.students)
                   return <tr key={student.id} className={selectedId === student.id ? 'selected' : ''} onClick={() => setSelectedId(student.id)}>
-                    <td><input type="radio" name="selected-student" checked={selectedId === student.id} onChange={() => setSelectedId(student.id)} aria-label={`Sélectionner ${student.firstName} ${student.lastName}`} /></td>
-                    <td><strong>{student.firstName} {student.lastName}</strong>{student.legacyImport && <small>Import ancien format</small>}</td>
-                    <td>{student.school}</td><td>{student.className}</td>
+                    <td><input type="radio" name="selected-student" checked={selectedId === student.id} onChange={() => setSelectedId(student.id)} aria-label={`Sélectionner ${fullName(student)}`} /></td>
+                    <td><strong>{fullName(student)}</strong>{student.legacyImport && <small>Import ancien format</small>}</td>
+                    <td>{schoolLabel(student.school)}</td><td>{student.className}</td>
                     <td><span className={`correspondent-chip ${correspondent.state}`}>{correspondent.state === 'found' ? <Check size={13} /> : correspondent.state === 'missing' ? <AlertTriangle size={13} /> : null}{correspondent.state === 'found' ? fullName(correspondent.student) : correspondent.state === 'missing' ? `${correspondent.name} · non ajouté` : 'Non renseigné'}</span></td>
                     <td className={student.participation === 'travel_no_host' ? 'danger-text' : ''}>{participationLabel[student.participation] || (student.canHost ? 'Possible' : 'Impossible')}</td>
                     <td>{student.conditionType === 'none' ? 'Libre' : student.conditionType === 'regular_only' ? 'son correspondant' : student.conditionType === 'different_only' ? 'autre personne' : 'personne précise'}</td>
