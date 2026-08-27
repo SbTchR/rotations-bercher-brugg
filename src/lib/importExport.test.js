@@ -53,7 +53,9 @@ describe('modern Excel import', () => {
     const workbook = buildScenarioWorkbook(workspace, scenario)
     expect(workbook.SheetNames).toEqual(['Groupes A-B', 'Détail des élèves'])
     expect(workbook.Sheets['Groupes A-B'].A2.v).toBe('Groupes A')
-    expect(workbook.Sheets['Groupes A-B'].B4.v).toContain('Léa Martin')
+    expect(workbook.Sheets['Groupes A-B'].B4.v).toBe('Léa Martin · 11VP1\n\nRue du Lac 1\nBercher\nTél. élève : 079 111 11 11\nTél. parents : 079 222 22 22')
+    expect(workbook.Sheets['Groupes A-B'].D3.v).toBe('')
+    expect(Object.values(workbook.Sheets['Groupes A-B']).some((cell) => cell?.v === 'Validation / informations')).toBe(false)
     expect(workbook.Sheets['Détail des élèves'].G3.v).toBe('079 111 11 11')
   })
 
@@ -67,6 +69,8 @@ describe('modern Excel import', () => {
     const sheet = workbook.Sheets['Mouvements des classes']
     expect(sheet.C4.v).toContain('Léa Martin')
     expect(sheet.G4.v).toContain('Nora Keller')
+    expect(sheet.C4.v).not.toContain('11VP1')
+    expect(sheet.G4.v).not.toContain('B1')
     expect(sheet.E4.v).toBe('-1 élève')
   })
 })

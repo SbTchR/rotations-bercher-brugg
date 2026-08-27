@@ -58,7 +58,7 @@ export default function AppShell({ current, onNavigate, children }) {
         </button>
         <Brand />
         <div className="topbar-center">
-          <button className="workspace-switcher" onClick={() => navigate('settings')}>{workspace.meta.title}</button>
+          <span className="workspace-title">{workspace.meta.title}</span>
           <SyncIndicator />
         </div>
         <div className="topbar-actions">

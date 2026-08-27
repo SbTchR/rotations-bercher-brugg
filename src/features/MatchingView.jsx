@@ -296,13 +296,13 @@ export default function MatchingView() {
     setDraggedPairingId(pairingId)
   }
   return (
-    <div className="view matching-view">
+    <div className={`view matching-view ${selectedStudent || selectedPairing ? 'has-inspector' : ''}`}>
       <div className="view-heading">
         <div><h1>Appairages</h1><p>Construisez et comparez vos propositions sans perdre les versions précédentes.</p></div>
         <div className="button-row"><button className="secondary-button" onClick={suggest}><Sparkles size={18} /> Meilleure suggestion</button><button className="primary-button" onClick={newScenario}><Plus size={18} /> Créer un scénario</button></div>
       </div>
       {suggestionMessage && <div className="suggestion-result"><Sparkles /><span>{suggestionMessage}</span><button className="icon-button small" onClick={() => setSuggestionMessage('')} aria-label="Fermer le résultat"><X /></button></div>}
-      <div className="scenario-tabs">{workspace.scenarios.map((item) => <button key={item.id} className={item.id === scenario.id ? 'active' : ''} onClick={() => { actions.setActiveScenario(item.id); setSelectedPairingId(null); setSelectedStudentId(null); setSelectedIds(new Set()) }}>{item.name}{item.status === 'validated' && <Lock size={13} />}</button>)}<button className="add-tab" onClick={newScenario}><Plus /></button></div>
+      <div className="scenario-tabs">{workspace.scenarios.map((item) => <button key={item.id} className={item.id === scenario.id ? 'active' : ''} onClick={() => { actions.setActiveScenario(item.id); setSelectedPairingId(null); setSelectedStudentId(null); setSelectedIds(new Set()) }}><span className="scenario-tab-copy"><strong>{item.name}</strong><small>{item.createdBy ? `Créé par ${item.createdBy}` : 'Créateur non indiqué'}</small></span>{item.status === 'validated' && <Lock size={13} />}</button>)}<button className="add-tab" onClick={newScenario}><Plus /></button></div>
       <div className="stats-strip"><span><UsersRound /> <strong>{stats.assigned}</strong><small>appariés</small></span><span><CircleDashed /><strong>{stats.unassigned}</strong><small>à placer</small></span><span className={stats.alertCount ? 'warning' : ''}><AlertTriangle /><strong>{stats.alertCount}</strong><small>alertes</small></span><span><b>A</b><strong>{stats.groupA}</strong><small>groupes</small></span><span><b>B</b><strong>{stats.groupB}</strong><small>groupes</small></span></div>
       <div className="matching-workspace">
         <StudentRail title="Bercher" side="bercher" students={workspace.students.filter((student) => student.side === 'bercher')} assigned={assigned} selectedIds={selectedIds} inspectedId={selectedStudentId} onSelect={selectStudent} />

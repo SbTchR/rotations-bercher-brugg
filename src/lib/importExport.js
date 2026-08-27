@@ -223,15 +223,14 @@ const conditionLabelForExport = (condition) => ({
 const genderLabelForExport = (genderValue) => ({ female: 'Fille', male: 'Garçon' }[genderValue] || 'Non renseigné')
 const safeFilename = (value) => clean(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'scenario'
 const participantDetails = (student) => [
-  fullName(student),
-  `${schoolLabelForExport(student.school)} · ${student.className || 'Classe non renseignée'}`,
-  genderLabelForExport(student.gender),
+  `${fullName(student)} · ${student.className || 'Classe non renseignée'}`,
+  '',
+  student.address || '—',
+  student.domicile || '—',
   `Tél. élève : ${student.studentPhone || '—'}`,
   `Tél. parents : ${student.parentPhone || '—'}`,
-  `Adresse : ${student.address || '—'}`,
-  `Domicile : ${student.domicile || '—'}`,
 ].join('\n')
-const namesForExport = (students) => students.length ? students.map((student) => `${fullName(student)} (${student.className || '—'})`).join('\n') : '—'
+const namesForExport = (students, withClass = true) => students.length ? students.map((student) => withClass ? `${fullName(student)} (${student.className || '—'})` : fullName(student)).join('\n') : '—'
 
 const titleStyle = { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 14 }, fill: { fgColor: { rgb: '117A8B' } }, alignment: { horizontal: 'center', vertical: 'center' } }
 const sectionStyle = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1E91A0' } }, alignment: { horizontal: 'center', vertical: 'center' } }
@@ -257,37 +256,31 @@ export function buildScenarioWorkbook(workspace, scenario) {
   const workbook = XLSX.utils.book_new()
   const groupsA = scenario.pairings.filter((pairing) => pairing.rotation === 'A')
   const groupsB = scenario.pairings.filter((pairing) => pairing.rotation === 'B')
-  const groupRows = [[`Scénario : ${scenario.name}`, '', '', '', '', '', '', '', ''], ['Groupes A', '', '', '', '', 'Groupes B', '', '', ''], ['Groupe', 'Élève(s) de Bercher', 'Élève(s) de Brugg', 'Validation / informations', '', 'Groupe', 'Élève(s) de Bercher', 'Élève(s) de Brugg', 'Validation / informations']]
+  const groupRows = [[`Scénario : ${scenario.name}`, '', '', '', '', '', ''], ['Groupes A', '', '', '', 'Groupes B', '', ''], ['Groupe', 'Élève(s) de Bercher', 'Élève(s) de Brugg', '', 'Groupe', 'Élève(s) de Bercher', 'Élève(s) de Brugg']]
   const groupCount = Math.max(groupsA.length, groupsB.length, 1)
   for (let index = 0; index < groupCount; index += 1) {
     const addGroup = (pairing, block, number) => {
-      if (!pairing) return ['', '', '', '']
+      if (!pairing) return ['', '', '']
       const bercher = pairingMembers(pairing, byId, 'bercher')
       const brugg = pairingMembers(pairing, byId, 'brugg')
       return [
         `${block}${number}`,
         bercher.map(participantDetails).join('\n\n'),
         brugg.map(participantDetails).join('\n\n'),
-        [
-          pairing.locked ? 'Validé' : 'À contrôler',
-          `Accueil à Bercher : ${pairing.bercherHostClass || bercher[0]?.className || '—'}`,
-          `Accueil à Brugg : ${pairing.bruggHostClass || brugg[0]?.className || '—'}`,
-          pairing.notes ? `Note : ${pairing.notes}` : '',
-        ].filter(Boolean).join('\n'),
       ]
     }
     groupRows.push([...addGroup(groupsA[index], 'A', index + 1), '', ...addGroup(groupsB[index], 'B', index + 1)])
   }
   const groupsSheet = XLSX.utils.aoa_to_sheet(groupRows)
-  groupsSheet['!merges'] = [XLSX.utils.decode_range('A1:I1'), XLSX.utils.decode_range('A2:D2'), XLSX.utils.decode_range('F2:I2')]
-  groupsSheet['!cols'] = [{ wch: 10 }, { wch: 38 }, { wch: 38 }, { wch: 30 }, { wch: 3 }, { wch: 10 }, { wch: 38 }, { wch: 38 }, { wch: 30 }]
+  groupsSheet['!merges'] = [XLSX.utils.decode_range('A1:G1'), XLSX.utils.decode_range('A2:C2'), XLSX.utils.decode_range('E2:G2')]
+  groupsSheet['!cols'] = [{ wch: 10 }, { wch: 42 }, { wch: 42 }, { wch: 3 }, { wch: 10 }, { wch: 42 }, { wch: 42 }]
   groupsSheet['!rows'] = [{ hpt: 26 }, { hpt: 22 }, { hpt: 31 }, ...Array.from({ length: groupCount }, () => ({ hpt: 130 }))]
-  applyStyle(groupsSheet, 'A1:I1', titleStyle)
-  applyStyle(groupsSheet, 'A2:D2', sectionStyle)
-  applyStyle(groupsSheet, 'F2:I2', secondarySectionStyle)
-  applyStyle(groupsSheet, 'A3:D3', headerStyle)
-  applyStyle(groupsSheet, 'F3:I3', headerStyle)
-  applyStyle(groupsSheet, `A4:I${groupCount + 3}`, cellStyle)
+  applyStyle(groupsSheet, 'A1:G1', titleStyle)
+  applyStyle(groupsSheet, 'A2:C2', sectionStyle)
+  applyStyle(groupsSheet, 'E2:G2', secondarySectionStyle)
+  applyStyle(groupsSheet, 'A3:C3', headerStyle)
+  applyStyle(groupsSheet, 'E3:G3', headerStyle)
+  applyStyle(groupsSheet, `A4:G${groupCount + 3}`, cellStyle)
   XLSX.utils.book_append_sheet(workbook, groupsSheet, 'Groupes A-B')
 
   const orderedPairings = [...scenario.pairings].sort((left, right) => (left.rotation || 'Z').localeCompare(right.rotation || 'Z'))
@@ -327,11 +320,11 @@ export function buildClassBalanceWorkbook(workspace, scenario) {
     rows.push([
       schoolLabelForExport(row.school),
       row.className,
-      namesForExport(row.first.outgoing),
-      namesForExport(row.first.incoming),
+      namesForExport(row.first.outgoing, false),
+      namesForExport(row.first.incoming, false),
       row.first.net > 0 ? `+${row.first.net} élève${row.first.net > 1 ? 's' : ''}` : row.first.net < 0 ? `${row.first.net} élève${row.first.net < -1 ? 's' : ''}` : '0 élève',
-      namesForExport(row.second.outgoing),
-      namesForExport(row.second.incoming),
+      namesForExport(row.second.outgoing, false),
+      namesForExport(row.second.incoming, false),
       row.second.net > 0 ? `+${row.second.net} élève${row.second.net > 1 ? 's' : ''}` : row.second.net < 0 ? `${row.second.net} élève${row.second.net < -1 ? 's' : ''}` : '0 élève',
     ])
   }
