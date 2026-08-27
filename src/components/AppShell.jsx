@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { accountLabel } from '../lib/accounts'
 
 const navItems = [
   { id: 'dashboard', label: 'Vue d’ensemble', icon: LayoutDashboard },
@@ -49,6 +50,7 @@ const SyncIndicator = () => {
 export default function AppShell({ current, onNavigate, children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { workspace, user, cloudEnabled, canUndo, canRedo, undo, redo, signOut } = useWorkspace()
+  const userLabel = accountLabel(user?.email)
   const navigate = (id) => { onNavigate(id); setMobileOpen(false) }
   return (
     <div className="app-shell">
@@ -64,7 +66,7 @@ export default function AppShell({ current, onNavigate, children }) {
         <div className="topbar-actions">
           <button className="icon-button" disabled={!canUndo} onClick={undo} title="Annuler"><Undo2 /></button>
           <button className="icon-button" disabled={!canRedo} onClick={redo} title="Rétablir"><Redo2 /></button>
-          <span className="avatar" title={user?.email || 'Mode démonstration'}>{(user?.email || 'D').slice(0, 2).toUpperCase()}</span>
+          <span className="avatar" title={userLabel}>{cloudEnabled ? userLabel.replace('Responsable ', 'R') : 'D'}</span>
         </div>
       </header>
 

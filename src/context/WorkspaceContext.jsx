@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createDemoWorkspace } from '../data/demoData'
-import { cloudEnabled, getSession, loadWorkspace, requestMagicLink, saveWorkspace, signOut } from '../lib/storage'
+import { cloudEnabled, getSession, loadWorkspace, saveWorkspace, signInWithCredentials, signOut } from '../lib/storage'
 
 const WorkspaceContext = createContext(null)
 
@@ -219,7 +219,10 @@ export function WorkspaceProvider({ children }) {
     undo,
     redo,
     reload,
-    requestMagicLink,
+    signInWithCredentials: async (accountId, password) => {
+      await signInWithCredentials(accountId, password)
+      await reload()
+    },
     signOut: async () => { await signOut(); await reload() },
   }
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>

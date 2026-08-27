@@ -134,11 +134,13 @@ insert into public.workspaces (title, school_year, data)
 values ('Échange 2026–2027', '2026–2027', '{}'::jsonb)
 on conflict (school_year) do nothing;
 
--- IMPORTANT : remplacer ces exemples par les trois vraies adresses, en minuscules,
--- puis exécuter les trois lignes dans l’éditeur SQL Supabase.
--- insert into public.authorized_users (email, organization, display_name) values
---   ('adresse-bercher@ecole.ch', 'Bercher', 'Responsable Bercher'),
---   ('adresse-bezirksschule@ecole.ch', 'Bezirksschule', 'Responsable Bezirksschule'),
---   ('adresse-sekundarschule@ecole.ch', 'Sekundarschule', 'Responsable Sekundarschule')
--- on conflict (email) do update
--- set organization = excluded.organization, display_name = excluded.display_name;
+-- Comptes génériques : créer séparément ces cinq utilisateurs dans Authentication → Users,
+-- avec une adresse déjà confirmée et un mot de passe distinct qui ne doit jamais figurer ici.
+insert into public.authorized_users (email, organization, display_name) values
+  ('responsable1@comptes.rotations-bercher-brugg.invalid', 'Bercher', 'Responsable 1'),
+  ('responsable2@comptes.rotations-bercher-brugg.invalid', 'Bezirksschule', 'Responsable 2'),
+  ('responsable3@comptes.rotations-bercher-brugg.invalid', 'Sekundarschule', 'Responsable 3'),
+  ('responsable4@comptes.rotations-bercher-brugg.invalid', 'Bercher', 'Responsable 4'),
+  ('responsable5@comptes.rotations-bercher-brugg.invalid', 'Bezirksschule', 'Responsable 5')
+on conflict (email) do update
+set organization = excluded.organization, display_name = excluded.display_name;

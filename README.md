@@ -1,6 +1,6 @@
 # Rotations Bercher–Brugg
 
-Webapp privée de préparation des inscriptions et appairages pour les échanges linguistiques de 11H. L’interface est publiée sur GitHub Pages; les données d’élèves restent dans une base Supabase protégée par connexion et liste blanche de trois adresses.
+Webapp privée de préparation des inscriptions et appairages pour les échanges linguistiques de 11H. L’interface est publiée sur GitHub Pages; les données d’élèves restent dans une base Supabase protégée par cinq comptes génériques créés à l’avance.
 
 ## Ce que l’outil gère
 
@@ -21,10 +21,12 @@ Le mode démonstration s’active uniquement sur `localhost`. Sur GitHub Pages, 
 
 1. Créer un projet Supabase dans la région souhaitée.
 2. Ouvrir l’éditeur SQL et exécuter [`supabase/schema.sql`](supabase/schema.sql).
-3. Remplacer les trois adresses d’exemple commentées à la fin du fichier par les adresses professionnelles exactes, en minuscules, puis exécuter ces lignes.
-4. Dans **Authentication → URL Configuration**, mettre l’URL GitHub Pages comme **Site URL** et l’ajouter aux **Redirect URLs**.
+3. Dans **Authentication → Users**, créer les cinq utilisateurs indiqués à la fin de `supabase/schema.sql`, avec un mot de passe différent pour chacun et l’adresse déjà confirmée. Ces adresses techniques ne sont jamais montrées aux utilisateurs.
+4. Dans les réglages du fournisseur **Email**, désactiver la création de nouveaux comptes. Il ne doit rester aucune inscription publique.
 5. Copier `public/config.example.js` vers `public/config.js`, puis remplacer l’URL et la clé publique `anon`. Conserver `allowDemo: false`. Cette clé est conçue pour être publique; les règles RLS de la base bloquent tout accès non autorisé.
 6. Dans GitHub, ouvrir **Settings → Pages → Build and deployment** et choisir **GitHub Actions**.
+
+L’écran de connexion attend uniquement `responsable1` à `responsable5` et le mot de passe correspondant. Ne jamais enregistrer ces mots de passe dans le dépôt.
 
 ## Développement local
 

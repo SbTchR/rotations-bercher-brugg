@@ -32,7 +32,7 @@ export default function DashboardView({ onNavigate }) {
           <button onClick={() => onNavigate('scenarios')}><span className="action-icon green"><CheckCircle2 /></span><span><strong>Comparer les scénarios</strong><small>{workspace.scenarios.length} propositions enregistrées</small></span></button>
         </section>
       </div>
-      <section className="privacy-band"><span className="action-icon teal">{cloudEnabled ? <Cloud /> : <Database />}</span><div><h2>{cloudEnabled ? 'Données partagées et protégées' : 'Démonstration locale'}</h2><p>{cloudEnabled ? 'Seules les trois adresses autorisées peuvent accéder aux fiches. GitHub Pages ne contient aucune donnée d’élève.' : 'Les modifications restent uniquement dans ce navigateur. Activez Supabase avant le travail réel à trois.'}</p></div><UsersRound /></section>
+      <section className="privacy-band"><span className="action-icon teal">{cloudEnabled ? <Cloud /> : <Database />}</span><div><h2>{cloudEnabled ? 'Données partagées et protégées' : 'Démonstration locale'}</h2><p>{cloudEnabled ? 'Seuls les comptes créés à l’avance peuvent accéder aux fiches. GitHub Pages ne contient aucune donnée d’élève.' : 'Les modifications restent uniquement dans ce navigateur. Activez Supabase avant le travail réel à trois.'}</p></div><UsersRound /></section>
     </div>
   )
 }

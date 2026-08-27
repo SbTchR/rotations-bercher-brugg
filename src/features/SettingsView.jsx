@@ -1,9 +1,11 @@
 import { Cloud, Database, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { accountLabel } from '../lib/accounts'
 
 export default function SettingsView() {
   const { workspace, actions, cloudEnabled, user, reload, syncMessage } = useWorkspace()
+  const userLabel = accountLabel(user?.email)
   const [draft, setDraft] = useState(workspace.meta)
   const save = (event) => { event.preventDefault(); actions.updateMeta(draft) }
   return (
@@ -19,8 +21,8 @@ export default function SettingsView() {
           <button className="primary-button">Enregistrer les paramètres</button>
         </form>
         <div className="settings-side">
-          <section className="settings-panel"><span className="settings-symbol">{cloudEnabled ? <Cloud /> : <Database />}</span><h2>{cloudEnabled ? 'Stockage privé activé' : 'Mode démonstration'}</h2><p>{cloudEnabled ? `Connecté avec ${user?.email}. Les données sont lues dans Supabase et jamais dans GitHub Pages.` : 'Les données restent dans le stockage local de ce navigateur. Elles ne sont pas partagées avec vos collègues.'}</p><button className="secondary-button" onClick={reload}><RefreshCw size={17} /> Recharger</button>{syncMessage && <p className="form-error">{syncMessage}</p>}</section>
-          <section className="settings-panel"><span className="settings-symbol success"><ShieldCheck /></span><h2>Accès prévu</h2><ul><li>Responsable Bercher</li><li>Responsable Bezirksschule Brugg</li><li>Responsable Sekundarschule Brugg</li></ul><p>Les trois adresses exactes sont autorisées dans la base de données, pas dans le code public.</p></section>
+          <section className="settings-panel"><span className="settings-symbol">{cloudEnabled ? <Cloud /> : <Database />}</span><h2>{cloudEnabled ? 'Stockage privé activé' : 'Mode démonstration'}</h2><p>{cloudEnabled ? `Connecté avec le compte ${userLabel}. Les données sont lues dans Supabase et jamais dans GitHub Pages.` : 'Les données restent dans le stockage local de ce navigateur. Elles ne sont pas partagées avec vos collègues.'}</p><button className="secondary-button" onClick={reload}><RefreshCw size={17} /> Recharger</button>{syncMessage && <p className="form-error">{syncMessage}</p>}</section>
+          <section className="settings-panel"><span className="settings-symbol success"><ShieldCheck /></span><h2>Accès privé</h2><ul><li>5 comptes génériques réutilisables</li><li>Aucune inscription publique</li><li>Déconnexion possible à tout moment</li></ul><p>Seuls les comptes créés à l’avance peuvent se connecter.</p></section>
         </div>
       </div>
       <section className="activity-panel"><h2>Activité récente</h2>{workspace.activity.length ? workspace.activity.slice(0, 10).map((item) => <p key={item.id}><time>{new Date(item.at).toLocaleString('fr-CH')}</time><span>{item.text}</span></p>) : <p>Aucune modification enregistrée pour le moment.</p>}</section>

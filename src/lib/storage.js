@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { createBlankWorkspace, createDemoWorkspace, normalizeWorkspace } from '../data/demoData'
+import { accountEmail } from './accounts'
 
 const LOCAL_KEY = 'rotations-bercher-brugg-v2'
 const config = globalThis.window?.ROTATIONS_CONFIG || {}
@@ -8,11 +9,11 @@ const hostname = globalThis.window?.location?.hostname || ''
 export const demoModeAllowed = config.allowDemo === true || ['localhost', '127.0.0.1', '[::1]'].includes(hostname)
 export const supabase = cloudEnabled ? createClient(config.supabaseUrl, config.supabaseAnonKey) : null
 
-export async function requestMagicLink(email) {
+export async function signInWithCredentials(accountId, password) {
   if (!supabase) throw new Error('Le stockage partagé n’est pas configuré.')
-  const redirectTo = `${window.location.origin}${window.location.pathname}`
-  const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } })
-  if (error) throw error
+  const email = accountEmail(accountId)
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) throw new Error('Identifiant ou mot de passe incorrect.')
 }
 
 export async function signOut() {

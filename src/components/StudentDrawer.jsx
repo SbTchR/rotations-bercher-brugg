@@ -98,7 +98,7 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
             <label>Animaux à domicile<input value={draft.animals} onChange={(event) => update('animals', event.target.value)} placeholder="Aucun, chats, chien…" /></label>
             <label>Préférence de groupe<input value={draft.groupPreference} onChange={(event) => update('groupPreference', event.target.value)} placeholder="Souhaite être avec…" /></label>
             <label>Commentaires confidentiels<textarea rows="4" value={draft.notes} onChange={(event) => update('notes', event.target.value)} placeholder="Allergies, santé, craintes, informations de placement…" /></label>
-            <div className="privacy-note"><LockKeyhole size={16} /> Visible uniquement par les trois responsables.</div>
+            <div className="privacy-note"><LockKeyhole size={16} /> Visible uniquement par les responsables autorisés.</div>
           </section>
 
           <section>
