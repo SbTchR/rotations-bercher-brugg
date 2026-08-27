@@ -127,7 +127,10 @@ create policy workspace_versions_authorized_select on public.workspace_versions
 revoke all on public.authorized_users, public.workspaces, public.workspace_versions from anon;
 revoke all on public.authorized_users, public.workspaces, public.workspace_versions from authenticated;
 grant select on public.authorized_users, public.workspaces, public.workspace_versions to authenticated;
-revoke all on function public.save_workspace(bigint, timestamptz, jsonb) from public;
+revoke all on function public.archive_workspace_version() from public, anon, authenticated;
+revoke all on function public.is_authorized() from public, anon, authenticated;
+grant execute on function public.is_authorized() to authenticated;
+revoke all on function public.save_workspace(bigint, timestamptz, jsonb) from public, anon, authenticated;
 grant execute on function public.save_workspace(bigint, timestamptz, jsonb) to authenticated;
 
 insert into public.workspaces (title, school_year, data)
