@@ -38,9 +38,10 @@ describe('modern Excel import', () => {
       namedPartner: 'Nora Keller',
       requiredRotation: 'B',
       otherInfo: 'Allergie aux chats',
-      active: true,
       status: 'complete',
     })
+    expect(result.scenarios[0].exchangeDecisions).toEqual({ [result.students[0].id]: 'maintained' })
+    expect(result.students[0]).not.toHaveProperty('active')
   })
 
   it('construit un export de scénario avec les blocs A/B et le détail des élèves', () => {

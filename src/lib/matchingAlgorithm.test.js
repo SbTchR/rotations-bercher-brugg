@@ -44,6 +44,45 @@ describe('findOptimalPairings', () => {
     expect(findOptimalPairings(students, new Set(['b1']))).toEqual([])
   })
 
+  it('prioritizes reciprocal hosting over usual correspondents and extra one-sided pairs', () => {
+    const students = [
+      { ...base, id: 'b1', side: 'bercher', name: 'Alice Martin', gender: 'female' },
+      { ...base, id: 'b2', side: 'bercher', name: 'Béatrice Morel', gender: 'female', participation: 'travel_no_host', regularCorrespondents: 'Rita Weiss' },
+      { ...base, id: 'r1', side: 'brugg', name: 'Rita Weiss', gender: 'female', regularCorrespondents: 'Béatrice Morel' },
+      { ...base, id: 'r2', side: 'brugg', name: 'Sarah Keller', gender: 'female', canHost: false, regularCorrespondents: 'Alice Martin' },
+    ]
+    expect(findOptimalPairings(students).map((pairing) => pairing.memberIds)).toEqual([['b1', 'r1']])
+  })
+
+  it('suggests a compatible one-sided pair when reciprocal hosting is unavailable', () => {
+    const students = [
+      { ...base, id: 'b1', side: 'bercher', name: 'Alice Martin', gender: 'female', participation: 'travel_no_host' },
+      { ...base, id: 'r1', side: 'brugg', name: 'Rita Weiss', gender: 'female' },
+    ]
+    const [result] = findOptimalPairings(students)
+    expect(result.memberIds).toEqual(['b1', 'r1'])
+    expect(result.result.warnings.join(' ')).toContain('l’hébergement est à organiser')
+    expect(findOptimalPairings([students[0], { ...students[1], canHost: false }])).toEqual([])
+  })
+
+  it('takes the eligibility decision from the selected scenario', () => {
+    const students = [
+      { ...base, id: 'b1', side: 'bercher', name: 'Alice Martin', gender: 'female' },
+      { ...base, id: 'r1', side: 'brugg', name: 'Rita Weiss', gender: 'female', active: false },
+    ]
+    expect(findOptimalPairings(students, undefined, undefined, { exchangeDecisions: { r1: 'declined' } })).toEqual([])
+    expect(findOptimalPairings(students, undefined, undefined, { exchangeDecisions: { r1: 'maintained' } })).toHaveLength(1)
+  })
+
+  it('keeps a required usual correspondent eligible when a typo is recognized', () => {
+    const students = [
+      { ...base, id: 'b1', side: 'bercher', name: 'Alice Martin', gender: 'female', conditionType: 'regular_only', regularCorrespondents: 'Ritta Weiss' },
+      { ...base, id: 'r1', side: 'brugg', name: 'Rita Weiss', gender: 'female' },
+      { ...base, id: 'r2', side: 'brugg', name: 'Rita Keller', gender: 'female' },
+    ]
+    expect(findOptimalPairings(students).map((pairing) => pairing.memberIds)).toEqual([['b1', 'r1']])
+  })
+
   it('spreads flexible suggestions across the two blocks and limits class differences', () => {
     const students = Array.from({ length: 4 }, (_, index) => [
       { ...base, id: `b${index}`, side: 'bercher', name: `Élève Bercher ${index}`, school: 'VP', className: '11VP1', gender: 'female' },

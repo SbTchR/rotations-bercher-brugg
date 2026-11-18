@@ -1,6 +1,7 @@
 const now = '2026-08-26T18:00:00.000Z'
 
 import { isStudentEnrollmentComplete, normalizeSchool } from '../lib/compatibility'
+import { normalizeScenarioDecisions } from '../lib/scenarioParticipation'
 
 const student = (id, side, suffix, values = {}) => ({
   id,
@@ -28,7 +29,6 @@ const student = (id, side, suffix, values = {}) => ({
   domicile: '',
   sharePhones: true,
   status: values.status || 'complete',
-  active: values.active ?? true,
   assignmentHint: values.assignmentHint || '',
   ...values,
 })
@@ -64,6 +64,7 @@ export const createDemoWorkspace = () => ({
     {
       id: 'scenario-1',
       name: 'Proposition 1',
+      exchangeDecisions: {},
       status: 'draft',
       createdAt: now,
       updatedAt: now,
@@ -77,6 +78,7 @@ export const createDemoWorkspace = () => ({
     {
       id: 'scenario-2',
       name: 'Proposition 2',
+      exchangeDecisions: {},
       status: 'draft',
       createdAt: now,
       updatedAt: now,
@@ -103,7 +105,7 @@ export const createBlankWorkspace = () => {
       groupB: 'Brugg → Bercher, puis Bercher → Brugg',
     },
     students: [],
-    scenarios: [{ id, name: 'Proposition 1', status: 'draft', createdAt: stamp, updatedAt: stamp, pairings: [] }],
+    scenarios: [{ id, name: 'Proposition 1', status: 'draft', createdAt: stamp, updatedAt: stamp, pairings: [], exchangeDecisions: {} }],
     activeScenarioId: id,
     activity: [],
   }
@@ -136,7 +138,6 @@ export const normalizeWorkspace = (value) => {
         gender: student.gender === 'female' || student.gender === 'male' ? student.gender : 'unspecified',
         participation: student.participation || (student.canHost === false ? 'travel_no_host' : 'exchange_and_host'),
         requiredRotation: student.requiredRotation || student.rotation || '',
-        active: student.active !== false,
         otherInfo,
         address: student.address || '',
         domicile: student.domicile || '',
@@ -144,7 +145,7 @@ export const normalizeWorkspace = (value) => {
       }
       return { ...normalizedStudent, status: isStudentEnrollmentComplete(normalizedStudent) ? 'complete' : 'review' }
     }),
-    scenarios: value.scenarios.length ? value.scenarios : demo.scenarios,
+    scenarios: normalizeScenarioDecisions(value.scenarios.length ? value.scenarios : demo.scenarios, value.students),
     activeScenarioId: value.activeScenarioId || value.scenarios[0]?.id || demo.activeScenarioId,
     activity: Array.isArray(value.activity) ? value.activity : [],
   }

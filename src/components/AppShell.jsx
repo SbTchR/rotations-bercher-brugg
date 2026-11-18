@@ -15,6 +15,7 @@ import {
 import { useState } from 'react'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { accountLabel } from '../lib/accounts'
+import { previewMode } from '../lib/storage'
 
 const navItems = [
   { id: 'students', label: 'Inscriptions', icon: ClipboardList },
@@ -42,7 +43,7 @@ const SyncIndicator = () => {
         : syncState === 'error' ? 'Erreur de sauvegarde'
           : cloudEnabled ? 'À jour' : 'Enregistré sur cet appareil'
   const Icon = error ? WifiOff : Wifi
-  return <span className={`sync-indicator ${error ? 'is-error' : ''}`} title={syncMessage || text}><Icon size={16} /> {text}</span>
+  return <span className={`sync-indicator ${error ? 'is-error' : ''}`} title={syncMessage || text} role="status"><Icon size={16} aria-hidden="true" /> {text}</span>
 }
 
 export default function AppShell({ current, onNavigate, children }) {
@@ -53,7 +54,7 @@ export default function AppShell({ current, onNavigate, children }) {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="icon-button mobile-menu" onClick={() => setMobileOpen((value) => !value)} aria-label="Ouvrir le menu">
+        <button className="icon-button mobile-menu" onClick={() => setMobileOpen((value) => !value)} aria-label={mobileOpen ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mobileOpen} aria-controls="main-sidebar">
           {mobileOpen ? <X /> : <Menu />}
         </button>
         <Brand />
@@ -62,27 +63,30 @@ export default function AppShell({ current, onNavigate, children }) {
           <SyncIndicator />
         </div>
         <div className="topbar-actions">
-          <button className="icon-button" disabled={!canUndo} onClick={undo} title="Annuler"><Undo2 /></button>
-          <button className="icon-button" disabled={!canRedo} onClick={redo} title="Rétablir"><Redo2 /></button>
+          <button className="icon-button" disabled={!canUndo} onClick={undo} title="Annuler" aria-label="Annuler"><Undo2 /></button>
+          <button className="icon-button" disabled={!canRedo} onClick={redo} title="Rétablir" aria-label="Rétablir"><Redo2 /></button>
           <span className="avatar" title={userLabel}>{cloudEnabled ? userLabel.replace('Responsable ', 'R') : 'D'}</span>
         </div>
       </header>
 
-      <aside className={`sidebar ${mobileOpen ? 'is-open' : ''}`}>
+      <aside id="main-sidebar" className={`sidebar ${mobileOpen ? 'is-open' : ''}`}>
         <nav aria-label="Navigation principale">
           {navItems.map(({ id, label, icon: Icon }) => (
-            <button key={id} className={current === id ? 'active' : ''} onClick={() => navigate(id)}>
-              <Icon size={19} /><span>{label}</span>
+            <button key={id} className={current === id ? 'active' : ''} aria-current={current === id ? 'page' : undefined} aria-label={label} title={label} onClick={() => navigate(id)}>
+              <Icon size={19} aria-hidden="true" /><span>{label}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar-footer">
           <p>{cloudEnabled ? 'Espace partagé privé' : 'Mode démonstration local'}</p>
-          {cloudEnabled && <button onClick={signOut}><LogOut size={17} /> Déconnexion</button>}
+          {cloudEnabled && <button onClick={signOut} aria-label="Déconnexion" title="Déconnexion"><LogOut size={17} aria-hidden="true" /> <span>Déconnexion</span></button>}
         </div>
       </aside>
 
-      <main className="main-content">{children}</main>
+      <main className="main-content">
+        {previewMode && <p className="preview-banner"><strong>Version de test</strong> Les données de démonstration restent dans ce navigateur.</p>}
+        {children}
+      </main>
       {mobileOpen && <button className="menu-backdrop" onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" />}
     </div>
   )

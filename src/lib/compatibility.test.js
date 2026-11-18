@@ -43,8 +43,48 @@ describe('evaluatePairing', () => {
       { ...base, id: 'b', side: 'bercher', firstName: 'Alice', lastName: 'Martin', regularCorrespondents: 'Léa Müller' },
       { ...base, id: 'r', side: 'brugg', firstName: 'Léa', lastName: 'Müller', regularCorrespondents: '' },
     ]
-    expect(getCorrespondentStatus(students[0], students).state).toBe('found')
+    expect(getCorrespondentStatus(students[0], students)).toMatchObject({ state: 'found', method: 'exact' })
     expect(getCorrespondentStatus({ ...students[0], regularCorrespondents: 'Personne absente' }, students).state).toBe('missing')
+  })
+
+  it('recognizes additional given names, surnames entered first and a minor typo', () => {
+    const bercher = { ...base, id: 'b', side: 'bercher', name: 'Alice Martin', conditionType: 'regular_only', regularCorrespondents: 'Müler, Clara' }
+    const brugg = { ...base, id: 'r', side: 'brugg', name: 'Clara Sophie Müller' }
+    const students = [bercher, brugg]
+    const status = getCorrespondentStatus(bercher, students)
+    expect(status).toMatchObject({ state: 'found', method: 'approximate', student: brugg })
+    expect(evaluatePairing(['b', 'r'], students, 'A')).toMatchObject({ conflicts: [] })
+    expect(evaluatePairing(['b', 'r'], students, 'A').warnings.join(' ')).toContain('reconnu par rapprochement')
+  })
+
+  it('resolves each listed usual correspondent and evaluates a match with any of them', () => {
+    const bercher = { ...base, id: 'b', side: 'bercher', name: 'Alice Martin', conditionType: 'regular_only', regularCorrespondents: 'Nora Keller, Zoé Weber\nPersonne absente' }
+    const students = [bercher,
+      { ...base, id: 'r1', side: 'brugg', name: 'Nora Keller' },
+      { ...base, id: 'r2', side: 'brugg', name: 'Zoé Weber' },
+    ]
+    expect(getCorrespondentStatus(bercher, students).matches.map((match) => match.student.id)).toEqual(['r1', 'r2'])
+    expect(evaluatePairing(['b', 'r2'], students, 'A').conflicts).toEqual([])
+  })
+
+  it('prefers exact matches and reports ties across the full opposite roster', () => {
+    const bercher = { ...base, id: 'b', side: 'bercher', name: 'Alice Martin', conditionType: 'regular_only', regularCorrespondents: 'Clara Müller' }
+    const brugg = { ...base, id: 'r1', side: 'brugg', name: 'Clara Sophie Müller' }
+    const otherBrugg = { ...base, id: 'r2', side: 'brugg', name: 'Clara Anna Muller', active: false }
+    const sameSide = { ...base, id: 'b2', side: 'bercher', name: 'Clara Müller' }
+    const students = [bercher, brugg, otherBrugg, sameSide]
+    expect(getCorrespondentStatus(bercher, students)).toMatchObject({ state: 'ambiguous', student: null, candidates: [brugg, otherBrugg] })
+    expect(evaluatePairing(['b', 'r1'], students, 'A').conditions.indispensable).toContainEqual({ state: 'review', label: expect.stringContaining('Plusieurs élèves') })
+    const exact = { ...base, id: 'r3', side: 'brugg', name: 'Clara Muller' }
+    expect(getCorrespondentStatus(bercher, [...students, exact])).toMatchObject({ state: 'found', method: 'exact', student: exact })
+  })
+
+  it('rejects the usual correspondent entered with a typo when a different partner is required', () => {
+    const bercher = { ...base, id: 'b', side: 'bercher', name: 'Alice Martin', conditionType: 'different_only', regularCorrespondents: 'Nora Kellre' }
+    const brugg = { ...base, id: 'r', side: 'brugg', name: 'Nora Keller' }
+    const students = [bercher, brugg]
+    expect(getCorrespondentStatus(bercher, students)).toMatchObject({ state: 'found', method: 'approximate' })
+    expect(evaluatePairing(['b', 'r'], students, 'A').conflicts.join(' ')).toContain('ne veut pas être avec')
   })
 
   it('recognizes the four school tracks and the single-name format', () => {
@@ -106,5 +146,18 @@ describe('evaluatePairing', () => {
     ]
     expect(scenarioStats({ pairings: [] }, students).unassigned).toBe(1)
     expect(evaluatePairing(['b', 'r'], students, 'A').conflicts.join(' ')).toContain('retiré de l’échange')
+  })
+
+  it('uses the decision in the evaluated scenario even when a legacy status differs', () => {
+    const students = [
+      { ...base, id: 'b', side: 'bercher', name: 'Léa Martin', active: false },
+      { ...base, id: 'r', side: 'brugg', name: 'Nora Keller' },
+    ]
+    const accepted = { pairings: [], exchangeDecisions: { b: 'maintained' } }
+    const rejected = { pairings: [], exchangeDecisions: { b: 'declined' } }
+    expect(scenarioStats(accepted, students).unassigned).toBe(2)
+    expect(scenarioStats(rejected, students).unassigned).toBe(1)
+    expect(evaluatePairing(['b', 'r'], students, 'A', accepted).conflicts).toEqual([])
+    expect(evaluatePairing(['b', 'r'], students, 'A', rejected).conflicts.join(' ')).toContain('retiré de l’échange')
   })
 })

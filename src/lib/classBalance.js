@@ -1,3 +1,5 @@
+import { isMaintainedInScenario } from './scenarioParticipation.js'
+
 const blankHalf = () => ({ outgoing: 0, incoming: 0, net: 0 })
 
 const classKey = (student) => `${student.side}|${student.school}|${student.className}`
@@ -28,7 +30,7 @@ export function calculateClassBalances(scenario, students) {
       undecidedPairings += 1
       continue
     }
-    const members = pairing.memberIds.map((id) => byId.get(id)).filter((student) => student?.active !== false)
+    const members = pairing.memberIds.map((id) => byId.get(id)).filter((student) => student && isMaintainedInScenario(student, scenario))
     const bercher = members.filter((student) => student.side === 'bercher')
     const brugg = members.filter((student) => student.side === 'brugg')
     if (!bercher.length || !brugg.length) continue
@@ -42,10 +44,14 @@ export function calculateClassBalances(scenario, students) {
     const bercherTravelHalf = pairing.rotation === 'A' ? 'first' : 'second'
     const bruggTravelHalf = pairing.rotation === 'A' ? 'second' : 'first'
 
-    for (const student of bercher) if (student.participation !== 'host_only') ensureStudentClass(student)[bercherTravelHalf].outgoing += 1
-    for (const student of brugg) if (student.participation !== 'host_only') ensureStudentClass(student)[bruggTravelHalf].outgoing += 1
-    bruggHost[bercherTravelHalf].incoming += bercher.length
-    bercherHost[bruggTravelHalf].incoming += brugg.length
+    for (const [studentsFromSchool, half] of [[bercher, bercherTravelHalf], [brugg, bruggTravelHalf]]) {
+      for (const student of studentsFromSchool) {
+        const row = ensureStudentClass(student)
+        if (row && student.participation !== 'host_only') row[half].outgoing += 1
+      }
+    }
+    if (bruggHost) bruggHost[bercherTravelHalf].incoming += bercher.length
+    if (bercherHost) bercherHost[bruggTravelHalf].incoming += brugg.length
   }
 
   const balances = [...rows.values()].map((row) => ({
@@ -84,7 +90,7 @@ export function calculateClassMovementDetails(scenario, students) {
       undecidedPairings += 1
       continue
     }
-    const members = pairing.memberIds.map((id) => byId.get(id)).filter((student) => student?.active !== false)
+    const members = pairing.memberIds.map((id) => byId.get(id)).filter((student) => student && isMaintainedInScenario(student, scenario))
     const bercher = members.filter((student) => student.side === 'bercher')
     const brugg = members.filter((student) => student.side === 'brugg')
     if (!bercher.length || !brugg.length) continue
@@ -100,12 +106,12 @@ export function calculateClassMovementDetails(scenario, students) {
     const bruggTravelers = brugg.filter((student) => student.participation !== 'host_only')
 
     for (const student of bercherTravelers) {
-      ensureClass(student)[bercherTravelHalf].outgoing.push(student)
-      bruggHost[bercherTravelHalf].incoming.push(student)
+      ensureClass(student)?.[bercherTravelHalf].outgoing.push(student)
+      bruggHost?.[bercherTravelHalf].incoming.push(student)
     }
     for (const student of bruggTravelers) {
-      ensureClass(student)[bruggTravelHalf].outgoing.push(student)
-      bercherHost[bruggTravelHalf].incoming.push(student)
+      ensureClass(student)?.[bruggTravelHalf].outgoing.push(student)
+      bercherHost?.[bruggTravelHalf].incoming.push(student)
     }
   }
 

@@ -13,11 +13,13 @@ Webapp privée de préparation des inscriptions et appairages pour les échanges
 - préférence non bloquante VP ↔ Bezirksschule et VG ↔ Sekundarschule;
 - autre sexe, rotations A/B et un champ unique « Autres infos utiles »;
 - binômes et groupes à trois, score expliqué, conflits bloquants et avertissements;
+- priorité aux binômes avec accueil réciproque, puis utilisation des places restantes pour les élèves qui voyagent sans pouvoir accueillir;
+- décisions de maintien dans chaque scénario et détection des correspondants habituels malgré de petites variations de nom, avec signalement des ambiguïtés;
 - blocs A/B bien séparés et bilan des départs, arrivées et soldes pour chaque classe et chaque partie de semaine;
 - scénarios indépendants, verrouillage, annuler/rétablir, export Excel, impression et sauvegarde JSON;
 - enregistrement partagé avec contrôle de version pour éviter l’écrasement silencieux du travail d’une collègue.
 
-Le mode démonstration s’active uniquement sur `localhost`. Sur GitHub Pages, l’application reste entièrement verrouillée tant que Supabase n’est pas configuré, puis demande une connexion avant d’afficher la moindre vue.
+En production, l’application reste entièrement verrouillée tant que Supabase n’est pas configuré, puis demande une connexion avant d’afficher la moindre vue. À l’ouverture des anciennes sauvegardes, les décisions de maintien et de refus sont reprises dans les scénarios existants. Les scénarios créés à partir de zéro ont leurs propres décisions, et la duplication reprend celles du scénario source.
 
 ## Activation du stockage privé
 
@@ -43,6 +45,8 @@ Avant publication :
 npm test
 npm run build
 ```
+
+Pour construire un aperçu isolé sur un hébergement de test, utiliser `npm run build:apercu`. Cette compilation exclut la configuration publique de production et utilise seulement des données de démonstration enregistrées dans le navigateur. Publier ce dossier `dist` sur une origine distincte de la production. Le workflow GitHub Pages de production ne s’exécute que pour `main`.
 
 ## Confidentialité
 

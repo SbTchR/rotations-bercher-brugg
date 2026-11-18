@@ -1,9 +1,10 @@
-import { evaluatePairing, fullName } from './compatibility.js'
+import { cannotHost, createPairingEvaluator, fullName } from './compatibility.js'
 import { calculateClassBalances } from './classBalance.js'
+import { isMaintainedInScenario } from './scenarioParticipation.js'
 
 const naturalCompare = (left, right) => fullName(left).localeCompare(fullName(right), 'fr-CH', { numeric: true, sensitivity: 'base' })
 
-const eligible = (student, assignedIds) => student.active !== false
+const eligible = (student, assignedIds, scenario) => isMaintainedInScenario(student, scenario)
   && student.participation !== 'host_only'
   && !assignedIds.has(student.id)
 
@@ -13,19 +14,17 @@ const optionQuality = (option) => {
   return optionalPasses * 10000 - optionalReviews * 200 + option.result.score
 }
 
-const validOptions = (left, right, students) => ['A', 'B']
+const validOptions = (left, right, evaluate) => ['A', 'B']
   .map((rotation) => ({
     rotation,
-    result: evaluatePairing([left.id, right.id], students, rotation),
+    result: evaluate([left.id, right.id], rotation),
   }))
   .filter((option) => option.result.conditions.indispensable.every((item) => item.state === 'pass'))
   .sort((first, second) => optionQuality(second) - optionQuality(first))
 
-const bestOption = (options) => options[0]
-
-const addEdge = (graph, from, to, capacity, cost, data = null) => {
-  const forward = { to, reverse: graph[to].length, capacity, cost, data }
-  const backward = { to: from, reverse: graph[from].length, capacity: 0, cost: -cost, data: null }
+const addEdge = (graph, from, to, capacity, cost) => {
+  const forward = { to, reverse: graph[to].length, capacity, cost }
+  const backward = { to: from, reverse: graph[from].length, capacity: 0, cost: -cost }
   graph[from].push(forward)
   graph[to].push(backward)
   return forward
@@ -37,6 +36,12 @@ function maximumWeightMatching(leftStudents, rightStudents, candidates) {
   const rightOffset = leftOffset + leftStudents.length
   const sink = rightOffset + rightStudents.length
   const graph = Array.from({ length: sink + 1 }, () => [])
+  const maxPairs = Math.min(leftStudents.length, rightStudents.length)
+  const maxQuality = candidates.reduce((max, candidate) => Math.max(max, Math.abs(candidate.quality)), 1)
+  // Each objective outweighs the entire possible variation of those below it.
+  const qualityRange = 2 * maxPairs * maxQuality
+  const pairWeight = qualityRange + 1
+  const reciprocalWeight = maxPairs * pairWeight + qualityRange + 1
 
   leftStudents.forEach((_, index) => addEdge(graph, source, leftOffset + index, 1, 0))
   rightStudents.forEach((_, index) => addEdge(graph, rightOffset + index, sink, 1, 0))
@@ -48,8 +53,7 @@ function maximumWeightMatching(leftStudents, rightStudents, candidates) {
       leftOffset + candidate.leftIndex,
       rightOffset + candidate.rightIndex,
       1,
-      -(1000000 + candidate.quality),
-      candidate,
+      -(pairWeight + candidate.quality + (candidate.reciprocal ? reciprocalWeight : 0)),
     ),
   }))
 
@@ -96,10 +100,10 @@ const toPairing = (candidate, option) => ({
   bruggHostClass: candidate.right.className || '',
 })
 
-const balanceObjective = (pairings, students) => {
+const balanceObjective = (pairings, students, scenario) => {
   const countA = pairings.filter((pairing) => pairing.rotation === 'A').length
   const countB = pairings.filter((pairing) => pairing.rotation === 'B').length
-  const { balances } = calculateClassBalances({ pairings }, students)
+  const { balances } = calculateClassBalances({ ...scenario, pairings }, students)
   const absoluteNets = balances.flatMap((row) => [Math.abs(row.first.net), Math.abs(row.second.net)])
   const highestClassDifference = Math.max(0, ...absoluteNets)
   const totalClassDifference = absoluteNets.reduce((total, value) => total + value, 0)
@@ -111,14 +115,14 @@ const balanceObjective = (pairings, students) => {
 
 const compareObjectives = (left, right) => left.cost - right.cost || right.optionalQuality - left.optionalQuality
 
-function assignBalancedRotations(candidates, students, existingPairings) {
+function assignBalancedRotations(candidates, students, existingPairings, scenario) {
   const ordered = [...candidates].sort((left, right) => left.options.length - right.options.length || naturalCompare(left.left, right.left) || naturalCompare(left.right, right.right))
   const selected = []
 
   for (const candidate of ordered) {
     const options = candidate.options.map((option) => {
       const pairing = toPairing(candidate, option)
-      return { candidate, option, pairing, objective: balanceObjective([...existingPairings, ...selected.map((item) => item.pairing), pairing], students) }
+      return { candidate, option, pairing, objective: balanceObjective([...existingPairings, ...selected.map((item) => item.pairing), pairing], students, scenario) }
     }).sort((left, right) => compareObjectives(left.objective, right.objective))
     selected.push(options[0])
   }
@@ -129,13 +133,13 @@ function assignBalancedRotations(candidates, students, existingPairings) {
     for (let index = 0; index < selected.length; index += 1) {
       const current = selected[index]
       if (current.candidate.options.length < 2) continue
-      const currentObjective = balanceObjective([...existingPairings, ...selected.map((item) => item.pairing)], students)
+      const currentObjective = balanceObjective([...existingPairings, ...selected.map((item) => item.pairing)], students, scenario)
       const alternatives = current.candidate.options
         .filter((option) => option.rotation !== current.option.rotation)
         .map((option) => {
           const pairing = toPairing(current.candidate, option)
           const replacement = selected.map((item, itemIndex) => itemIndex === index ? { candidate: current.candidate, option, pairing } : item)
-          return { candidate: current.candidate, option, pairing, objective: balanceObjective([...existingPairings, ...replacement.map((item) => item.pairing)], students) }
+          return { candidate: current.candidate, option, pairing, objective: balanceObjective([...existingPairings, ...replacement.map((item) => item.pairing)], students, scenario) }
         })
         .sort((left, right) => compareObjectives(left.objective, right.objective))
       if (alternatives[0] && compareObjectives(alternatives[0].objective, currentObjective) < 0) {
@@ -148,19 +152,31 @@ function assignBalancedRotations(candidates, students, existingPairings) {
   return selected.map(({ pairing }) => pairing)
 }
 
-export function findOptimalPairings(students, assignedIds = new Set(), existingPairings = []) {
-  const leftStudents = students.filter((student) => student.side === 'bercher' && eligible(student, assignedIds)).sort(naturalCompare)
-  const rightStudents = students.filter((student) => student.side === 'brugg' && eligible(student, assignedIds)).sort(naturalCompare)
+export function findOptimalPairings(students, assignedIds = new Set(), existingPairings = [], scenario) {
+  const leftStudents = students.filter((student) => student.side === 'bercher' && eligible(student, assignedIds, scenario)).sort(naturalCompare)
+  const rightStudents = students.filter((student) => student.side === 'brugg' && eligible(student, assignedIds, scenario)).sort(naturalCompare)
+  const evaluate = createPairingEvaluator(students, scenario)
   const candidates = []
 
   leftStudents.forEach((left, leftIndex) => {
     rightStudents.forEach((right, rightIndex) => {
-      const options = validOptions(left, right, students)
-      const option = bestOption(options)
+      const leftCannotHost = cannotHost(left)
+      const rightCannotHost = cannotHost(right)
+      if (leftCannotHost && rightCannotHost) return
+      const options = validOptions(left, right, evaluate)
+      const [option] = options
       if (!option) return
-      candidates.push({ left, right, leftIndex, rightIndex, options, quality: optionQuality(option) })
+      candidates.push({
+        left,
+        right,
+        leftIndex,
+        rightIndex,
+        options,
+        quality: optionQuality(option),
+        reciprocal: !leftCannotHost && !rightCannotHost,
+      })
     })
   })
 
-  return assignBalancedRotations(maximumWeightMatching(leftStudents, rightStudents, candidates), students, existingPairings)
+  return assignBalancedRotations(maximumWeightMatching(leftStudents, rightStudents, candidates), students, existingPairings, scenario)
 }

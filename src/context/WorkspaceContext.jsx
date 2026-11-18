@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createDemoWorkspace } from '../data/demoData'
 import { fullName } from '../lib/compatibility'
+import { removeStudentsFromPairings, scenarioDecisionLabels, updateScenarioDecision } from '../lib/scenarioParticipation'
 import { cloudEnabled, getSession, loadWorkspace, saveWorkspace, signInWithCredentials, signOut } from '../lib/storage'
 
 const WorkspaceContext = createContext(null)
@@ -121,38 +122,37 @@ export function WorkspaceProvider({ children }) {
       commit((current) => ({ ...current, students: [...current.students, student] }), `Fiche ajoutée: ${fullName(student)}`.trim())
     },
     updateStudent(student) {
+      commit((current) => ({
+        ...current,
+        students: current.students.map((item) => item.id === student.id ? student : item),
+      }), `Fiche mise à jour: ${fullName(student)}`)
+    },
+    setScenarioStudentDecision(scenarioId, student, decision) {
       commit((current) => {
-        const students = current.students.map((item) => item.id === student.id ? student : item)
-        if (student.active !== false) return { ...current, students }
-        const byId = new Map(students.map((item) => [item.id, item]))
+        const studentsById = new Map(current.students.map((item) => [item.id, item]))
+        return {
+          ...current,
+          scenarios: current.scenarios.map((scenario) => scenario.id === scenarioId
+            ? updateScenarioDecision(scenario, student.id, decision, studentsById)
+            : scenario),
+        }
+      }, `${fullName(student)} · ${scenarioDecisionLabels[decision]}`)
+    },
+    removeStudents(studentIds) {
+      const ids = new Set(studentIds)
+      commit((current) => {
+        const students = current.students.filter((student) => !ids.has(student.id))
+        const studentsById = new Map(students.map((student) => [student.id, student]))
         return {
           ...current,
           students,
           scenarios: current.scenarios.map((scenario) => ({
             ...scenario,
-            pairings: scenario.pairings.map((pairing) => ({ ...pairing, memberIds: pairing.memberIds.filter((id) => id !== student.id) })).filter((pairing) => {
-              const members = pairing.memberIds.map((id) => byId.get(id)).filter(Boolean)
-              return members.length >= 2 && members.some((item) => item.side === 'bercher') && members.some((item) => item.side === 'brugg')
-            }),
+            exchangeDecisions: Object.fromEntries(Object.entries(scenario.exchangeDecisions || {}).filter(([id]) => !ids.has(id))),
+            pairings: removeStudentsFromPairings(scenario.pairings, studentsById, ids),
           })),
         }
-      }, student.active === false ? `Échange refusé: ${fullName(student)}`.trim() : `Fiche mise à jour: ${fullName(student)}`.trim())
-    },
-    removeStudents(studentIds) {
-      const ids = new Set(studentIds)
-      commit((current) => ({
-        ...current,
-        students: current.students.filter((student) => !ids.has(student.id)),
-        scenarios: current.scenarios.map((scenario) => ({
-          ...scenario,
-          pairings: scenario.pairings
-            .map((pairing) => ({ ...pairing, memberIds: pairing.memberIds.filter((id) => !ids.has(id)) }))
-            .filter((pairing) => {
-              const members = pairing.memberIds.map((id) => current.students.find((student) => student.id === id && !ids.has(id))).filter(Boolean)
-              return members.length >= 2 && members.some((student) => student.side === 'bercher') && members.some((student) => student.side === 'brugg')
-            }),
-        })),
-      }), `${ids.size} fiche${ids.size > 1 ? 's supprimées' : ' supprimée'}`)
+      }, `${ids.size} fiche${ids.size > 1 ? 's supprimées' : ' supprimée'}`)
     },
     setActiveScenario(id) {
       commit((current) => ({ ...current, activeScenarioId: id }))
@@ -163,7 +163,7 @@ export function WorkspaceProvider({ children }) {
       commit((current) => ({
         ...current,
         activeScenarioId: id,
-        scenarios: [...current.scenarios, { id, name, createdBy, status: 'draft', createdAt: stamp, updatedAt: stamp, pairings: [] }],
+        scenarios: [...current.scenarios, { id, name, createdBy, status: 'draft', createdAt: stamp, updatedAt: stamp, pairings: [], exchangeDecisions: {} }],
       }), `Scénario créé: ${name}`)
     },
     cloneScenario(sourceId, name, createdBy = '') {
@@ -182,6 +182,7 @@ export function WorkspaceProvider({ children }) {
             status: 'draft',
             createdAt: stamp,
             updatedAt: stamp,
+            exchangeDecisions: { ...source?.exchangeDecisions },
             pairings: (source?.pairings || []).map((pairing) => ({ ...pairing, id: crypto.randomUUID(), locked: false })),
           }],
         }

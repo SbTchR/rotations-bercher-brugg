@@ -2,11 +2,12 @@ import { createClient } from '@supabase/supabase-js'
 import { createBlankWorkspace, createDemoWorkspace, normalizeWorkspace } from '../data/demoData'
 import { accountEmail } from './accounts'
 
-const LOCAL_KEY = 'rotations-bercher-brugg-v2'
-const config = globalThis.window?.ROTATIONS_CONFIG || {}
+export const previewMode = import.meta.env.MODE === 'test-preview'
+const LOCAL_KEY = previewMode ? 'rotations-bercher-brugg-test' : 'rotations-bercher-brugg-v2'
+const config = previewMode ? {} : globalThis.window?.ROTATIONS_CONFIG || {}
 export const cloudEnabled = Boolean(config.supabaseUrl && config.supabaseAnonKey)
 const hostname = globalThis.window?.location?.hostname || ''
-export const demoModeAllowed = config.allowDemo === true || ['localhost', '127.0.0.1', '[::1]'].includes(hostname)
+export const demoModeAllowed = previewMode || config.allowDemo === true || ['localhost', '127.0.0.1', '[::1]'].includes(hostname)
 export const supabase = cloudEnabled ? createClient(config.supabaseUrl, config.supabaseAnonKey) : null
 
 export async function signInWithCredentials(accountId, password) {

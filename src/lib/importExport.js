@@ -1,10 +1,12 @@
 import * as XLSX from '@e965/xlsx'
 import { normalizeWorkspace } from '../data/demoData.js'
-import { fullName, getCorrespondentStatus, isStudentEnrollmentComplete, normalizeSchool } from './compatibility.js'
+import { createNameResolver, fullName, getCorrespondentStatus, isStudentEnrollmentComplete, normalizeSchool } from './compatibility.js'
 import { calculateClassMovementDetails } from './classBalance.js'
+import { getScenarioDecision } from './scenarioParticipation.js'
 
 const yes = (value) => value === true || ['OUI', 'YES', '1', 'VRAI'].includes(String(value || '').trim().toUpperCase())
 const clean = (value) => String(value ?? '').trim()
+const no = (value) => value === false || clean(value).toUpperCase() === 'NON'
 const gender = (value) => {
   const normalized = clean(value).toLowerCase()
   if (['f', 'fille', 'female', 'féminin', 'feminin'].includes(normalized)) return 'female'
@@ -12,10 +14,10 @@ const gender = (value) => {
   return 'unspecified'
 }
 
-const participation = (value) => {
+const participation = (value, canHost) => {
   const normalized = clean(value).toLowerCase()
-  if (normalized.includes('ne veut pas') || normalized.includes('ne voyage pas') || normalized.includes('accueille uniquement')) return 'host_only'
-  if (normalized.includes('ne peut pas accueillir') || normalized.includes('accueil impossible')) return 'travel_no_host'
+  if (normalized === 'host_only' || /ne veut pas|ne voyage pas|accueille uniquement/.test(normalized)) return 'host_only'
+  if (normalized === 'travel_no_host' || /ne peut (?:pas )?accueillir|accueil impossible|sans (?:pouvoir )?accueillir/.test(normalized) || no(canHost)) return 'travel_no_host'
   return 'exchange_and_host'
 }
 
@@ -35,7 +37,7 @@ const studentFromModernRow = (row) => {
   const schoolValue = clean(valueFrom(row, 'Établissement', 'Filière'))
   const className = clean(row.Classe)
   const side = ['VP', 'VG', 'Bercher'].includes(schoolValue) || /^11V[PG]/i.test(className) ? 'bercher' : 'brugg'
-  const normalizedParticipation = participation(row.Participation)
+  const normalizedParticipation = participation(row.Participation, row['Peut accueillir'])
   const normalizedCondition = conditionType(valueFrom(row, 'Condition partenaire', 'Condition'))
   const groupCondition = clean(valueFrom(row, 'Condition de groupe', 'Groupe indispensable')).toUpperCase().match(/(?:GROUPE\s*)?([AB])\b/)?.[1] || ''
   const normalizedGender = gender(row.Genre)
@@ -55,7 +57,6 @@ const studentFromModernRow = (row) => {
     canHost: normalizedParticipation !== 'travel_no_host',
     acceptsOtherGender: yes(row['Autre sexe accepté']),
     requiredRotation: groupCondition,
-    active: clean(row['Échange maintenu']).toUpperCase() !== 'NON',
     otherInfo: clean(row['Autres infos utiles']),
     notes: '',
     animals: '',
@@ -92,7 +93,6 @@ const studentFromLegacy = (row, side, start) => {
     animals: '',
     requiredRotation: '',
     legacyRotation: clean(row[start + 8]).toUpperCase(),
-    active: true,
     groupPreference: '',
     notes: clean(row[start + 6]),
     studentPhone: '',
@@ -113,14 +113,23 @@ export async function importLegacyWorkbook(file, currentWorkspace) {
   const workbook = XLSX.read(buffer, { type: 'array' })
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
   const modernRows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-  const modernStudents = modernRows.map(studentFromModernRow).filter(Boolean)
+  const exchangeDecisions = {}
+  const modernStudents = modernRows.map((row) => {
+    const student = studentFromModernRow(row)
+    if (student) {
+      const value = row['Échange maintenu']
+      if (yes(value)) exchangeDecisions[student.id] = 'maintained'
+      else if (no(value)) exchangeDecisions[student.id] = 'declined'
+    }
+    return student
+  }).filter(Boolean)
   if (modernStudents.length) {
     const stamp = new Date().toISOString()
     const scenarioId = crypto.randomUUID()
     return normalizeWorkspace({
       ...currentWorkspace,
       students: modernStudents,
-      scenarios: [{ id: scenarioId, name: 'Import Excel', status: 'draft', createdAt: stamp, updatedAt: stamp, pairings: [] }],
+      scenarios: [{ id: scenarioId, name: 'Import Excel', status: 'draft', createdAt: stamp, updatedAt: stamp, pairings: [], exchangeDecisions }],
       activeScenarioId: scenarioId,
       activity: [{ id: crypto.randomUUID(), at: stamp, text: `${modernStudents.length} élèves importés depuis le nouveau format Excel.` }],
     })
@@ -181,6 +190,9 @@ export async function importJson(file) {
 }
 
 export function exportStudentsXlsx(workspace) {
+  const scenario = workspace.scenarios.find((item) => item.id === workspace.activeScenarioId) || workspace.scenarios[0]
+  const resolveName = createNameResolver(workspace.students)
+  const decisionLabels = { maintained: 'OUI', declined: 'NON', pending: '' }
   const labels = {
     exchange_and_host: 'Participe — accueil possible',
     travel_no_host: 'Participe — accueil impossible',
@@ -195,11 +207,12 @@ export function exportStudentsXlsx(workspace) {
     'Peut accueillir': student.canHost ? 'OUI' : 'NON',
     'Autre sexe accepté': student.acceptsOtherGender ? 'OUI' : 'NON',
     'Correspondant actuel': student.regularCorrespondents,
-    'Correspondant ajouté': getCorrespondentStatus(student, workspace.students).state === 'found' ? 'OUI' : 'NON',
+    'Correspondant ajouté': getCorrespondentStatus(student, workspace.students, resolveName).state === 'found' ? 'OUI' : 'NON',
     'Condition partenaire': conditionLabelForExport(student.conditionType),
     'Personne demandée': student.namedPartner,
     'Condition de groupe': student.requiredRotation || '',
-    'Échange maintenu': student.active === false ? 'NON' : 'OUI',
+    'Échange maintenu': decisionLabels[getScenarioDecision(student, scenario)],
+    'Scénario de la décision': scenario?.name || '',
     'Autres infos utiles': student.otherInfo || [student.animals && `Animaux : ${student.animals}`, student.groupPreference && `Souhait de regroupement : ${student.groupPreference}`, student.notes].filter(Boolean).join('\n'),
     'Téléphone élève': student.studentPhone,
     'Téléphone parents': student.parentPhone,

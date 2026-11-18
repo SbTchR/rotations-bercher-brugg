@@ -26,6 +26,7 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
     onSave({ ...draft, status: isStudentEnrollmentComplete(draft) ? 'complete' : 'review' })
   }
   const correspondent = getCorrespondentStatus(draft, students)
+  const hasCloseName = correspondent.matches.some(({ method }) => method === 'approximate')
   return (
     <div className="drawer-layer">
       <button className="drawer-backdrop" onClick={onClose} aria-label="Fermer la fiche" />
@@ -52,7 +53,16 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
             <h3>Correspondant actuel</h3>
             <label>Nom du correspondant habituel<input value={draft.regularCorrespondents} onChange={(event) => update('regularCorrespondents', event.target.value)} placeholder="Nom et prénom" /></label>
             {correspondent.state === 'found' ? (
-              <div className="correspondent-state found"><CheckCircle2 /><span><strong>Déjà ajouté dans l’application</strong><small>{fullName(correspondent.student)} · {correspondent.student.className}</small></span></div>
+              <div className={`correspondent-state ${hasCloseName ? 'missing' : 'found'}`}>
+                <CheckCircle2 />
+                <span>
+                  <strong>{hasCloseName ? 'Nom proche reconnu' : 'Déjà ajouté dans l’application'}</strong>
+                  <small>{correspondent.matches.map(({ student }) => `${fullName(student)} · ${student.className}`).join(' / ')}</small>
+                  {correspondent.candidates.length > 0 && <small>Noms à préciser · {correspondent.candidates.map(fullName).join(' · ')}</small>}
+                </span>
+              </div>
+            ) : correspondent.state === 'ambiguous' ? (
+              <div className="correspondent-state missing"><CircleDashed /><span><strong>Plusieurs noms possibles</strong><small>{correspondent.candidates.map(fullName).join(' · ')}. Précisez le nom pour identifier le correspondant.</small></span></div>
             ) : correspondent.state === 'missing' ? (
               <div className="correspondent-state missing"><CircleDashed /><span><strong>Pas encore ajouté</strong><small>Cette personne ne participe peut-être pas à l’échange.</small></span></div>
             ) : (
@@ -88,12 +98,6 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
             </div>
             {draft.requiredRotation && <label>Ne peut participer que dans le groupe<select value={draft.requiredRotation} onChange={(event) => update('requiredRotation', event.target.value)}><option value="A">A</option><option value="B">B</option></select></label>}
             <p className="field-help">En règle générale, les élèves ne choisissent pas leur groupe. Cochez uniquement si leur participation dépend du groupe A ou B.</p>
-          </section>
-
-          <section>
-            <h3>Décision</h3>
-            <label className="toggle-label"><input type="checkbox" checked={draft.active !== false} onChange={(event) => update('active', event.target.checked)} /> Élève maintenu dans l’échange</label>
-            <p className="field-help">Décochez si l’échange lui est refusé. Sa fiche reste conservée, mais il ne peut plus être apparié.</p>
           </section>
 
           <section>
