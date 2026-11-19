@@ -6,10 +6,21 @@ export function getMatchingComments(entity) {
     : []
 }
 
-export function createMatchingComment({ kind, text }, author) {
+export function createMatchingComment(text, author) {
   const content = String(text ?? '').trim()
-  if (!['comment', 'question'].includes(kind) || !content || content.length > MATCHING_COMMENT_LIMIT) return null
-  return { id: crypto.randomUUID(), kind, text: content, author, at: new Date().toISOString() }
+  if (!content || content.length > MATCHING_COMMENT_LIMIT) return null
+  return { id: crypto.randomUUID(), text: content, author, at: new Date().toISOString() }
+}
+
+export function removeStudentComment(workspace, studentId, commentId) {
+  const student = workspace.students.find(({ id }) => id === studentId)
+  if (!student || !getMatchingComments(student).some(({ id }) => id === commentId)) return workspace
+  return {
+    ...workspace,
+    students: workspace.students.map((item) => item === student
+      ? { ...item, matchingComments: item.matchingComments.filter((entry) => entry?.id !== commentId) }
+      : item),
+  }
 }
 
 export function appendMatchingComment(workspace, target, comment) {

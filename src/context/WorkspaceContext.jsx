@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { createDemoWorkspace } from '../data/demoData'
 import { accountLabel } from '../lib/accounts'
 import { fullName } from '../lib/compatibility'
-import { appendMatchingComment, createMatchingComment } from '../lib/matchingComments'
+import { appendMatchingComment, createMatchingComment, removeStudentComment } from '../lib/matchingComments'
 import { canAppendPairings } from '../lib/pairingBatch'
 import { removeStudentsFromPairings, scenarioDecisionLabels, updateScenarioDecision } from '../lib/scenarioParticipation'
 import { cloudEnabled, getSession, loadWorkspace, saveWorkspace, signInWithCredentials, signOut } from '../lib/storage'
@@ -131,14 +131,16 @@ export function WorkspaceProvider({ children }) {
         students: current.students.map((item) => item.id === student.id ? student : item),
       }), `Fiche mise à jour: ${fullName(student)}`)
     },
-    addMatchingComment(target, draft) {
+    addMatchingComment(target, text) {
       const label = accountLabel(user?.email)
       const author = /^Responsable [1-5]$/.test(label) ? label : 'Compte local'
-      const comment = createMatchingComment(draft, author)
+      const comment = createMatchingComment(text, author)
       if (!comment) return false
-      commit((current) => appendMatchingComment(current, target, comment),
-        comment.kind === 'question' ? 'Question ajoutée dans les appairages' : 'Commentaire ajouté dans les appairages')
+      commit((current) => appendMatchingComment(current, target, comment), 'Message ajouté dans les appairages')
       return true
+    },
+    deleteStudentComment(studentId, commentId) {
+      commit((current) => removeStudentComment(current, studentId, commentId), 'Message supprimé de la fiche élève')
     },
     setScenarioStudentDecision(scenarioId, student, decision) {
       commit((current) => {

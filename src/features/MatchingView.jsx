@@ -199,7 +199,7 @@ function PairMember({ student, onInspect, onDiscuss }) {
         </span>
       </button>
       {count > 0 && (
-        <button type="button" className="member-discussion-badge" aria-label={`Commentaires et questions de ${fullName(student)}`} draggable={false} onClick={() => onDiscuss(student.id)}>
+        <button type="button" className="member-discussion-badge" aria-label={`Messages de ${fullName(student)}`} draggable={false} onClick={() => onDiscuss(student.id)}>
           <DiscussionBadge count={count} />
         </button>
       )}
@@ -244,7 +244,7 @@ function PairingCard({ pairing, students, evaluate, selected, onSelect, onInspec
         <button type="button" className="pairing-card-status" onClick={() => onSelect(pairing.id)} aria-label={`Compatibilité : ${result.score}%`}>{status === 'success' ? <CheckCircle2 /> : <AlertTriangle />}<span>{result.score}%</span></button>
         {hostHint && <Cue icon={House} tone={members.length > 2 ? 'unavailable' : 'warning'} label={`Accueil insuffisant · ${hostHint}`} />}
         {commentCount > 0 && (
-          <button type="button" className="pairing-discussion-badge" aria-label={`Commentaires et questions du groupe · ${groupNames || 'Groupe'}`} draggable={false} onClick={() => onDiscuss(pairing.id)}>
+          <button type="button" className="pairing-discussion-badge" aria-label={`Messages du groupe · ${groupNames || 'Groupe'}`} draggable={false} onClick={() => onDiscuss(pairing.id)}>
             <DiscussionBadge count={commentCount} />
           </button>
         )}
@@ -615,7 +615,8 @@ export default function MatchingView() {
         <MatchingDiscussion
           subject={discussionStudent ? fullName(discussionStudent) : discussionGroup.memberIds.map((id) => fullName(workspace.students.find((student) => student.id === id))).filter(Boolean).join(' · ') || 'Groupe'}
           comments={getMatchingComments(discussionEntity)}
-          onAdd={(draft) => actions.addMatchingComment(discussionTarget, draft)}
+          onAdd={(text) => actions.addMatchingComment(discussionTarget, text)}
+          onRemove={discussionStudent ? (id) => actions.deleteStudentComment(discussionStudent.id, id) : undefined}
           onClose={() => setDiscussionTarget(null)}
         />
       )}

@@ -137,15 +137,22 @@ button.pairing-discussion-badge {
   font-size: .75rem;
 }
 
-.discussion-kind {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--info-text);
+.discussion-remove {
+  display: grid;
+  min-width: 26px;
+  min-height: 26px;
+  place-items: center;
+  padding: 3px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
 }
 
-.discussion-kind.question {
-  color: var(--warning-text);
+.discussion-remove:hover,
+.discussion-remove:focus-visible {
+  color: var(--danger-text);
+  background: var(--coral-soft);
 }
 
 .discussion-list time {
@@ -176,8 +183,7 @@ button.pairing-discussion-badge {
   font-weight: 650;
 }
 
-.discussion-form textarea,
-.discussion-form select {
+.discussion-form textarea {
   font-size: 1rem;
 }
 
