@@ -15,6 +15,7 @@ Webapp privée de préparation des inscriptions et appairages pour les échanges
 - binômes et groupes à trois, score expliqué, conflits bloquants et avertissements;
 - priorité aux binômes avec accueil réciproque et aux correspondants habituels compatibles;
 - appairage automatique en deux temps : propositions, cas à examiner et élèves en attente, puis validation explicite des groupes retenus;
+- commentaires et questions depuis les appairages, associés à une fiche élève ou à un groupe du scénario;
 - capacité d’accueil par famille (une place par défaut) et examen des groupes à trois avec accueil couvert dans les deux écoles;
 - décisions de maintien dans chaque scénario et détection des correspondants habituels malgré de petites variations de nom, avec signalement des ambiguïtés;
 - blocs A/B bien séparés et bilan des départs, arrivées et soldes pour chaque classe et chaque partie de semaine;

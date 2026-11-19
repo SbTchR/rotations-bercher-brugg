@@ -1,7 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createDemoWorkspace } from '../data/demoData'
+import { accountLabel } from '../lib/accounts'
 import { fullName } from '../lib/compatibility'
+import { appendMatchingComment, createMatchingComment } from '../lib/matchingComments'
 import { canAppendPairings } from '../lib/pairingBatch'
 import { removeStudentsFromPairings, scenarioDecisionLabels, updateScenarioDecision } from '../lib/scenarioParticipation'
 import { cloudEnabled, getSession, loadWorkspace, saveWorkspace, signInWithCredentials, signOut } from '../lib/storage'
@@ -128,6 +130,15 @@ export function WorkspaceProvider({ children }) {
         ...current,
         students: current.students.map((item) => item.id === student.id ? student : item),
       }), `Fiche mise à jour: ${fullName(student)}`)
+    },
+    addMatchingComment(target, draft) {
+      const label = accountLabel(user?.email)
+      const author = /^Responsable [1-5]$/.test(label) ? label : 'Compte local'
+      const comment = createMatchingComment(draft, author)
+      if (!comment) return false
+      commit((current) => appendMatchingComment(current, target, comment),
+        comment.kind === 'question' ? 'Question ajoutée dans les appairages' : 'Commentaire ajouté dans les appairages')
+      return true
     },
     setScenarioStudentDecision(scenarioId, student, decision) {
       commit((current) => {
@@ -278,7 +289,7 @@ export function WorkspaceProvider({ children }) {
     updateMeta(updates) {
       commit((current) => ({ ...current, meta: { ...current.meta, ...updates } }), 'Paramètres mis à jour')
     },
-  }), [commit])
+  }), [commit, user?.email])
 
   const value = {
     workspace,
