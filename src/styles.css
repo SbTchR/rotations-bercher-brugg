@@ -439,6 +439,11 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .scenario-decision p, .scenario-decision small { margin: 0; color: var(--info-text); font-size: .73rem; line-height: 1.4; }
 .student-inspector > header > div { display: grid; gap: 2px; }
 .student-inspector > header small { font-size: .72rem; }
+.student-inspector-actions { display: flex; gap: 2px; }
+.student-group-conditions { margin: 0 13px 10px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.student-group-conditions > h3 { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0; padding: 8px 9px; font-size: .85rem; }
+.student-group-conditions > h3 small { color: var(--muted); font-size: .72rem; }
+.student-group-conditions .check-list { padding: 7px 8px; }
 .student-inspector-title { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; padding: 15px 13px 10px; }
 .student-inspector-title > div { display: grid; gap: 3px; }
 .student-inspector-title strong { font-size: .84rem; }
