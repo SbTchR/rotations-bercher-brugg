@@ -1,12 +1,13 @@
 import * as XLSX from '@e965/xlsx'
 import { normalizeWorkspace } from '../data/demoData.js'
-import { createNameResolver, fullName, getCorrespondentStatus, isStudentEnrollmentComplete, normalizeSchool } from './compatibility.js'
+import { createNameResolver, fullName, getCorrespondentStatus, hostCapacity, isStudentEnrollmentComplete, normalizeSchool } from './compatibility.js'
 import { calculateClassMovementDetails } from './classBalance.js'
 import { getScenarioDecision } from './scenarioParticipation.js'
 
 const yes = (value) => value === true || ['OUI', 'YES', '1', 'VRAI'].includes(String(value || '').trim().toUpperCase())
 const clean = (value) => String(value ?? '').trim()
 const no = (value) => value === false || clean(value).toUpperCase() === 'NON'
+const hostingCapacityColumn = 'Nombre maximal de correspondants à héberger'
 const gender = (value) => {
   const normalized = clean(value).toLowerCase()
   if (['f', 'fille', 'female', 'féminin', 'feminin'].includes(normalized)) return 'female'
@@ -55,6 +56,7 @@ const studentFromModernRow = (row) => {
     namedPartner: clean(valueFrom(row, 'Personne demandée', 'Personne précise')),
     regularCorrespondents: clean(row['Correspondant actuel']),
     canHost: normalizedParticipation !== 'travel_no_host',
+    hostCapacity: row[hostingCapacityColumn],
     acceptsOtherGender: yes(row['Autre sexe accepté']),
     requiredRotation: groupCondition,
     otherInfo: clean(row['Autres infos utiles']),
@@ -189,7 +191,7 @@ export async function importJson(file) {
   return normalizeWorkspace(JSON.parse(await file.text()))
 }
 
-export function exportStudentsXlsx(workspace) {
+export function buildStudentsWorkbook(workspace) {
   const scenario = workspace.scenarios.find((item) => item.id === workspace.activeScenarioId) || workspace.scenarios[0]
   const resolveName = createNameResolver(workspace.students)
   const decisionLabels = { maintained: 'OUI', declined: 'NON', pending: '' }
@@ -204,7 +206,8 @@ export function exportStudentsXlsx(workspace) {
     Classe: student.className,
     Genre: student.gender,
     Participation: labels[student.participation],
-    'Peut accueillir': student.canHost ? 'OUI' : 'NON',
+    'Peut accueillir': hostCapacity(student) > 0 ? 'OUI' : 'NON',
+    [hostingCapacityColumn]: hostCapacity(student),
     'Autre sexe accepté': student.acceptsOtherGender ? 'OUI' : 'NON',
     'Correspondant actuel': student.regularCorrespondents,
     'Correspondant ajouté': getCorrespondentStatus(student, workspace.students, resolveName).state === 'found' ? 'OUI' : 'NON',
@@ -221,7 +224,11 @@ export function exportStudentsXlsx(workspace) {
   }))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Inscriptions')
-  XLSX.writeFile(workbook, `inscriptions-${workspace.meta.schoolYear}.xlsx`)
+  return workbook
+}
+
+export function exportStudentsXlsx(workspace) {
+  XLSX.writeFile(buildStudentsWorkbook(workspace), `inscriptions-${workspace.meta.schoolYear}.xlsx`)
 }
 
 const schoolLabelForExport = (school) => school === 'Bezirksschule' ? 'Bez' : school === 'Sekundarschule' ? 'Sek' : school

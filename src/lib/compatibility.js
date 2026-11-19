@@ -189,7 +189,19 @@ export function getTrackLabel(student) {
   return 'Filière non reconnue'
 }
 
-export const cannotHost = (student) => student.participation === 'travel_no_host' || student.canHost === false
+export const cannotHost = (student) => student?.participation === 'travel_no_host' || student?.canHost === false
+
+export function hostCapacity(student) {
+  if (!student || cannotHost(student)) return 0
+  const capacity = Number(student.hostCapacity)
+  return Number.isSafeInteger(capacity) && capacity > 0 ? capacity : 1
+}
+
+function hostingAvailability(hosts, visitors, scenario) {
+  const required = visitors.filter((student) => student.participation !== 'host_only' && isMaintainedInScenario(student, scenario)).length
+  const available = hosts.reduce((sum, student) => sum + (isMaintainedInScenario(student, scenario) ? hostCapacity(student) : 0), 0)
+  return { required, available, sufficient: available >= required }
+}
 
 const uniqueConditions = (items) => items.filter((item, index, array) => array.findIndex((candidate) => candidate.label === item.label) === index)
 
@@ -202,13 +214,28 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
   const addEssential = (state, label) => indispensable.push({ state, label })
   const addOptional = (state, label) => optional.push({ state, label })
 
+  if (members.length !== memberIds.length) addEssential('fail', 'Une fiche élève du groupe est introuvable.')
+  if (new Set(memberIds).size !== memberIds.length) addEssential('fail', 'Un élève figure plusieurs fois dans ce groupe.')
   if (!bercher.length || !brugg.length) addEssential('fail', 'Le groupe doit contenir des élèves des deux écoles.')
+
+  const hosting = {
+    bercher: hostingAvailability(bercher, brugg, scenario),
+    brugg: hostingAvailability(brugg, bercher, scenario),
+  }
+  if (bercher.length && brugg.length) {
+    for (const [side, { required, available, sufficient }] of Object.entries(hosting)) {
+      if (sufficient) continue
+      const location = side === 'bercher' ? 'Bercher' : 'Brugg'
+      const capacityMessage = `Accueil à ${location} insuffisant : ${available} place${available > 1 ? 's' : ''} pour ${required} élève${required > 1 ? 's' : ''}.`
+      if (members.length > 2) addEssential('fail', capacityMessage)
+      else addOptional('review', capacityMessage)
+    }
+  }
 
   for (const student of members) {
     if (student.participation === 'host_only') addEssential('fail', `${fullName(student)} ne participe pas au déplacement.`)
     if (!isMaintainedInScenario(student, scenario)) addEssential('fail', `${fullName(student)} a été retiré de l’échange dans ce scénario.`)
     if (student.status === 'review') addOptional('review', `Fiche de ${fullName(student)} à vérifier.`)
-    if (cannotHost(student)) addOptional('review', `${fullName(student)} ne peut pas accueillir : l’hébergement est à organiser.`)
   }
 
   if (members.length === 2 && members[0].gender === members[1].gender && ['female', 'male'].includes(members[0].gender)) {
@@ -221,7 +248,11 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
       return incompatible ? [`${fullName(student)} ne peut pas être avec ${incompatible.gender === 'male' ? 'un garçon' : 'une fille'}.`] : []
     })
     if (genderFailures.length) genderFailures.forEach((label) => addEssential('fail', label))
-    else addEssential('pass', members.every((student) => student.acceptsOtherGender) ? 'Les élèves acceptent un partenaire de l’autre sexe.' : 'La condition de genre est respectée.')
+    else if (members.some((student) => student.acceptsOtherGender === false
+      && (![ 'female', 'male' ].includes(student.gender)
+        || members.some((partner) => partner.side !== student.side && ![ 'female', 'male' ].includes(partner.gender))))) {
+      addEssential('review', 'Le genre doit être renseigné pour vérifier la condition de partenaire du même sexe.')
+    } else addEssential('pass', members.every((student) => student.acceptsOtherGender) ? 'Les élèves acceptent un partenaire de l’autre sexe.' : 'La condition de genre est respectée.')
   }
 
   const requiredGroups = members.filter((student) => student.requiredRotation)
@@ -234,17 +265,26 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
     }
   }
 
-  let regularLinks = 0
+  const regularLinksById = new Map()
+  let hasAmbiguousUsualLink = false
+  let hasDifferentUsualPartner = false
   for (const student of members) {
     const { regular, named } = getRelations(student)
-    const requestedRegular = regular.matches.find((match) => memberIds.includes(match.student.id))
+    const requestedMatches = regular.matches.filter((match) => memberIds.includes(match.student.id))
+    const requestedRegular = requestedMatches[0]
     const requestedNamed = memberIds.includes(named.student?.id)
     const hasAmbiguousRegularInGroup = regular.candidates.some((candidate) => memberIds.includes(candidate.id))
     const ambiguousRegular = `Plusieurs élèves correspondent au nom indiqué par ${fullName(student)}.`
 
     if (requestedRegular) {
-      regularLinks += 1
-      if (requestedRegular.method === 'approximate') addOptional('review', `Correspondant de ${fullName(student)} reconnu par rapprochement (${fullName(requestedRegular.student)}).`)
+      regularLinksById.set(student.id, requestedMatches.map(({ student: match }) => match.id))
+      for (const match of requestedMatches) {
+        if (match.method === 'approximate') addOptional('review', `Correspondant de ${fullName(student)} reconnu par rapprochement (${fullName(match.student)}).`)
+      }
+    } else if (hasAmbiguousRegularInGroup) {
+      hasAmbiguousUsualLink = true
+    } else if (regular.matches.length) {
+      hasDifferentUsualPartner = true
     }
 
     if (student.conditionType === 'regular_only') {
@@ -278,9 +318,17 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
     }
   }
 
+  const regularLinks = regularLinksById.size
+  const fullyReciprocal = members.length > 1 && members.every((student) => (
+    regularLinksById.get(student.id)?.some((id) => regularLinksById.get(id)?.includes(student.id))
+  ))
+  let usualStatus = hasDifferentUsualPartner ? 'different' : 'unknown'
+  if (hasAmbiguousUsualLink) usualStatus = 'ambiguous'
+  if (regularLinks) usualStatus = fullyReciprocal ? 'mutual' : 'partial'
+
   if (members.length === 2 && members.every((student) => student.conditionType === 'none')) {
-    if (regularLinks === 2) addEssential('pass', 'Les deux élèves sont correspondants de base.')
-    else if (!members.some((student) => student.regularCorrespondents?.trim() || student.namedPartner?.trim())) addEssential('pass', 'Les deux élèves ne sont pas correspondants et n’ont pas mis de condition.')
+    if (usualStatus === 'mutual') addEssential('pass', 'Les deux élèves sont correspondants de base.')
+    else if (!members.some((student) => student.regularCorrespondents?.trim() || student.namedPartner?.trim())) addEssential('pass', 'Choix du partenaire libre pour les deux élèves.')
   }
 
   if (bercher.length && brugg.length) {
@@ -297,7 +345,7 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
   const respected = [...cleanEssential.filter((item) => item.state === 'pass'), ...cleanOptional.filter((item) => item.state === 'pass')].map((item) => item.label)
   const rawScore = 100 - conflicts.length * 30 - warnings.length * 5
   const score = Math.max(0, Math.min(warnings.length ? 94 : 100, rawScore))
-  return { score, respected, warnings, conflicts, conditions: { indispensable: cleanEssential, optional: cleanOptional } }
+  return { score, respected, warnings, conflicts, hosting, usualStatus, regularLinks, conditions: { indispensable: cleanEssential, optional: cleanOptional } }
 }
 
 export function createPairingEvaluator(students, scenario) {

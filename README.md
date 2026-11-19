@@ -13,13 +13,17 @@ Webapp privée de préparation des inscriptions et appairages pour les échanges
 - préférence non bloquante VP ↔ Bezirksschule et VG ↔ Sekundarschule;
 - autre sexe, rotations A/B et un champ unique « Autres infos utiles »;
 - binômes et groupes à trois, score expliqué, conflits bloquants et avertissements;
-- priorité aux binômes avec accueil réciproque, puis utilisation des places restantes pour les élèves qui voyagent sans pouvoir accueillir;
+- priorité aux binômes avec accueil réciproque et aux correspondants habituels compatibles;
+- appairage automatique en deux temps : propositions, cas à examiner et élèves en attente, puis validation explicite des groupes retenus;
+- capacité d’accueil par famille (une place par défaut) et examen des groupes à trois avec accueil couvert dans les deux écoles;
 - décisions de maintien dans chaque scénario et détection des correspondants habituels malgré de petites variations de nom, avec signalement des ambiguïtés;
 - blocs A/B bien séparés et bilan des départs, arrivées et soldes pour chaque classe et chaque partie de semaine;
 - scénarios indépendants, verrouillage, annuler/rétablir, export Excel, impression et sauvegarde JSON;
 - enregistrement partagé avec contrôle de version pour éviter l’écrasement silencieux du travail d’une collègue.
 
 En production, l’application reste entièrement verrouillée tant que Supabase n’est pas configuré, puis demande une connexion avant d’afficher la moindre vue. À l’ouverture des anciennes sauvegardes, les décisions de maintien et de refus sont reprises dans les scénarios existants. Les scénarios créés à partir de zéro ont leurs propres décisions, et la duplication reprend celles du scénario source.
+
+La fenêtre d’appairage automatique travaille sur les élèves disponibles dans le scénario actif. Chaque choix provisoire relance le calcul des autres propositions. Après validation, seuls les groupes prêts sont ajoutés. Les élèves encore à examiner restent disponibles. Les groupes déjà enregistrés et les sauvegardes historiques sont conservés.
 
 ## Activation du stockage privé
 

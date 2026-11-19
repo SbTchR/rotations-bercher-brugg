@@ -1,6 +1,6 @@
 const now = '2026-08-26T18:00:00.000Z'
 
-import { isStudentEnrollmentComplete, normalizeSchool } from '../lib/compatibility'
+import { hostCapacity, isStudentEnrollmentComplete, normalizeSchool } from '../lib/compatibility'
 import { normalizeScenarioDecisions } from '../lib/scenarioParticipation'
 
 const student = (id, side, suffix, values = {}) => ({
@@ -31,6 +31,7 @@ const student = (id, side, suffix, values = {}) => ({
   status: values.status || 'complete',
   assignmentHint: values.assignmentHint || '',
   ...values,
+  hostCapacity: hostCapacity(values),
 })
 
 export const createDemoWorkspace = () => ({
@@ -143,7 +144,7 @@ export const normalizeWorkspace = (value) => {
         domicile: student.domicile || '',
         sharePhones: true,
       }
-      return { ...normalizedStudent, status: isStudentEnrollmentComplete(normalizedStudent) ? 'complete' : 'review' }
+      return { ...normalizedStudent, hostCapacity: hostCapacity(normalizedStudent), status: isStudentEnrollmentComplete(normalizedStudent) ? 'complete' : 'review' }
     }),
     scenarios: normalizeScenarioDecisions(value.scenarios.length ? value.scenarios : demo.scenarios, value.students),
     activeScenarioId: value.activeScenarioId || value.scenarios[0]?.id || demo.activeScenarioId,

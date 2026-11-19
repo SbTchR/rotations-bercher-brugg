@@ -1,6 +1,6 @@
 import { CheckCircle2, CircleDashed, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { fullName, getCorrespondentStatus, isStudentEnrollmentComplete } from '../lib/compatibility'
+import { cannotHost, fullName, getCorrespondentStatus, hostCapacity, isStudentEnrollmentComplete } from '../lib/compatibility'
 
 const participationOptions = [
   ['exchange_and_host', 'Participe et peut accueillir'],
@@ -23,10 +23,11 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
   const update = (key, value) => setDraft((current) => ({ ...current, [key]: value }))
   const submit = (event) => {
     event.preventDefault()
-    onSave({ ...draft, status: isStudentEnrollmentComplete(draft) ? 'complete' : 'review' })
+    onSave({ ...draft, hostCapacity: hostCapacity(draft), status: isStudentEnrollmentComplete(draft) ? 'complete' : 'review' })
   }
   const correspondent = getCorrespondentStatus(draft, students)
   const hasCloseName = correspondent.matches.some(({ method }) => method === 'approximate')
+  const hostingPossible = !cannotHost(draft)
   return (
     <div className="drawer-layer">
       <button className="drawer-backdrop" onClick={onClose} aria-label="Fermer la fiche" />
@@ -73,12 +74,27 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
           <section>
             <h3>Participation</h3>
             <div className="segmented three">
-              {participationOptions.map(([value, label]) => <button type="button" key={value} className={draft.participation === value ? 'active' : ''} onClick={() => setDraft((current) => ({
+              {participationOptions.map(([value, label]) => <button type="button" key={value} className={draft.participation === value ? 'active' : ''} aria-pressed={draft.participation === value} onClick={() => setDraft((current) => ({
                 ...current,
                 participation: value,
                 canHost: value !== 'travel_no_host',
+                hostCapacity: value === 'travel_no_host' ? 0 : hostCapacity(current) || 1,
               }))}>{label}</button>)}
             </div>
+            <label>Nombre maximal de correspondants à héberger
+              <input
+                type="number"
+                min="1"
+                max={Number.MAX_SAFE_INTEGER}
+                step="1"
+                required={hostingPossible}
+                disabled={!hostingPossible}
+                value={hostingPossible ? draft.hostCapacity ?? 1 : 0}
+                onChange={(event) => update('hostCapacity', event.target.value)}
+                aria-describedby="hosting-capacity-help"
+              />
+            </label>
+            <p id="hosting-capacity-help" className="field-help">Indiquez combien d’élèves la famille peut héberger en même temps.</p>
             <p className="field-help">Les élèves qui ne voyagent pas peuvent tout de même être enregistrés comme accueillants.</p>
           </section>
 

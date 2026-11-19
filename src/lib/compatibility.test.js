@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluatePairing, fullName, getCorrespondentStatus, isStudentEnrollmentComplete, normalizeSchool, scenarioStats } from './compatibility.js'
+import { evaluatePairing, fullName, getCorrespondentStatus, hostCapacity, isStudentEnrollmentComplete, normalizeSchool, scenarioStats } from './compatibility.js'
 
 const base = { participation: 'exchange_and_host', canHost: true, acceptsOtherGender: true, conditionType: 'none', rotation: 'A', notes: '', status: 'complete' }
 
@@ -12,12 +12,48 @@ describe('evaluatePairing', () => {
     expect(evaluatePairing(['b', 'r'], students).conflicts).toEqual([])
   })
 
-  it('does not use hosting ability as a compatibility criterion', () => {
+  it('retains a legacy pair with insufficient hosting and marks the missing place', () => {
     const students = [
       { ...base, id: 'b', side: 'bercher', school: 'Bercher', className: '11VG1', firstName: 'A', lastName: 'B', gender: 'female', canHost: false, participation: 'travel_no_host', regularCorrespondents: '' },
       { ...base, id: 'r', side: 'brugg', school: 'Sekundarschule', className: 'S1', firstName: 'C', lastName: 'D', gender: 'female', regularCorrespondents: '' },
     ]
-    expect(evaluatePairing(['b', 'r'], students).conflicts).toEqual([])
+    expect(evaluatePairing(['b', 'r'], students)).toMatchObject({
+      conflicts: [],
+      warnings: expect.arrayContaining([expect.stringContaining('Accueil à Bercher')]),
+      hosting: {
+        bercher: { required: 1, available: 0, sufficient: false },
+        brugg: { required: 1, available: 1, sufficient: true },
+      },
+    })
+  })
+
+  it('defaults old hosting records to one place and disregards capacity when the student cannot host', () => {
+    expect(hostCapacity(base)).toBe(1)
+    expect(hostCapacity({ ...base, hostCapacity: 3 })).toBe(3)
+    expect(hostCapacity({ ...base, hostCapacity: '2' })).toBe(2)
+    expect(hostCapacity({ ...base, hostCapacity: 2.5 })).toBe(1)
+    expect(hostCapacity({ ...base, hostCapacity: 3, canHost: false })).toBe(0)
+    expect(hostCapacity({ ...base, hostCapacity: 3, participation: 'travel_no_host' })).toBe(0)
+  })
+
+  it('sums declared hosting places for a group and blocks a shortage at either school', () => {
+    const left = { ...base, id: 'b', side: 'bercher', name: 'Alice Martin', hostCapacity: 2 }
+    const right = { ...base, id: 'r1', side: 'brugg', name: 'Nora Keller' }
+    const third = { ...base, id: 'r2', side: 'brugg', name: 'Zoé Weber', participation: 'travel_no_host' }
+    const ids = [left.id, right.id, third.id]
+    expect(evaluatePairing(ids, [{ ...left, hostCapacity: 1 }, right, third]).conflicts).toEqual([
+      expect.stringContaining('1 place pour 2 élèves'),
+    ])
+    expect(evaluatePairing(ids, [left, right, third])).toMatchObject({
+      conflicts: [],
+      hosting: {
+        bercher: { required: 2, available: 2, sufficient: true },
+        brugg: { required: 1, available: 1, sufficient: true },
+      },
+    })
+    expect(evaluatePairing(ids, [left, { ...right, canHost: false }, third]).conflicts).toEqual([
+      expect.stringContaining('Accueil à Brugg'),
+    ])
   })
 
   it('treats VP to Bezirk and VG to Sekundar as a soft preference', () => {
@@ -74,9 +110,20 @@ describe('evaluatePairing', () => {
     const sameSide = { ...base, id: 'b2', side: 'bercher', name: 'Clara Müller' }
     const students = [bercher, brugg, otherBrugg, sameSide]
     expect(getCorrespondentStatus(bercher, students)).toMatchObject({ state: 'ambiguous', student: null, candidates: [brugg, otherBrugg] })
+    expect(evaluatePairing(['b', 'r1'], students, 'A').usualStatus).toBe('ambiguous')
     expect(evaluatePairing(['b', 'r1'], students, 'A').conditions.indispensable).toContainEqual({ state: 'review', label: expect.stringContaining('Plusieurs élèves') })
     const exact = { ...base, id: 'r3', side: 'brugg', name: 'Clara Muller' }
     expect(getCorrespondentStatus(bercher, [...students, exact])).toMatchObject({ state: 'found', method: 'exact', student: exact })
+  })
+
+  it('distinguishes reciprocal, one-sided, different and unknown usual correspondents', () => {
+    const left = { ...base, id: 'b', side: 'bercher', name: 'Alice Martin', regularCorrespondents: 'Nora Keller' }
+    const right = { ...base, id: 'r', side: 'brugg', name: 'Nora Marie Keller', regularCorrespondents: 'Alice Martin' }
+    const other = { ...base, id: 'r2', side: 'brugg', name: 'Zoé Weber' }
+    expect(evaluatePairing(['b', 'r'], [left, right])).toMatchObject({ usualStatus: 'mutual', regularLinks: 2 })
+    expect(evaluatePairing(['b', 'r'], [left, { ...right, regularCorrespondents: '' }])).toMatchObject({ usualStatus: 'partial', regularLinks: 1 })
+    expect(evaluatePairing(['b', 'r2'], [left, right, other])).toMatchObject({ usualStatus: 'different', regularLinks: 0 })
+    expect(evaluatePairing(['b', 'r2'], [left, other])).toMatchObject({ usualStatus: 'unknown', regularLinks: 0 })
   })
 
   it('rejects the usual correspondent entered with a typo when a different partner is required', () => {

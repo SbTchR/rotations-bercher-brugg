@@ -1,7 +1,7 @@
 import * as XLSX from '@e965/xlsx'
 import { describe, expect, it } from 'vitest'
 import { createBlankWorkspace } from '../data/demoData.js'
-import { buildClassBalanceWorkbook, buildScenarioWorkbook, importLegacyWorkbook } from './importExport.js'
+import { buildClassBalanceWorkbook, buildScenarioWorkbook, buildStudentsWorkbook, importJson, importLegacyWorkbook } from './importExport.js'
 
 describe('modern Excel import', () => {
   it('imports detailed conditions from one row per pupil', async () => {
@@ -33,6 +33,7 @@ describe('modern Excel import', () => {
       gender: 'female',
       participation: 'travel_no_host',
       canHost: false,
+      hostCapacity: 0,
       acceptsOtherGender: false,
       conditionType: 'named_only',
       namedPartner: 'Nora Keller',
@@ -42,6 +43,22 @@ describe('modern Excel import', () => {
     })
     expect(result.scenarios[0].exchangeDecisions).toEqual({ [result.students[0].id]: 'maintained' })
     expect(result.students[0]).not.toHaveProperty('active')
+  })
+
+  it('preserves hosting places in Excel and JSON and defaults old enrolling families to one place', async () => {
+    const workspace = createBlankWorkspace()
+    workspace.students = [
+      { id: 'b1', side: 'bercher', name: 'Léa Martin', school: 'VP', className: '11VP1', gender: 'female', hostCapacity: 3 },
+      { id: 'r1', side: 'brugg', name: 'Nora Keller', school: 'Bezirksschule', className: 'B1', gender: 'female' },
+      { id: 'r2', side: 'brugg', name: 'Zoé Weber', school: 'Sekundarschule', className: 'S1', gender: 'female', participation: 'travel_no_host' },
+    ]
+    const workbook = buildStudentsWorkbook(workspace)
+    const bytes = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
+    const excel = await importLegacyWorkbook({ arrayBuffer: async () => bytes }, createBlankWorkspace())
+    const json = await importJson({ text: async () => JSON.stringify(workspace) })
+    expect(excel.students.map(({ hostCapacity }) => hostCapacity)).toEqual([3, 1, 0])
+    expect(json.students.map(({ hostCapacity }) => hostCapacity)).toEqual([3, 1, 0])
+    expect(json.students.map(({ id }) => id)).toEqual(['b1', 'r1', 'r2'])
   })
 
   it('construit un export de scénario avec les blocs A/B et le détail des élèves', () => {

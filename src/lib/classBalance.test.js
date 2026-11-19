@@ -43,4 +43,20 @@ describe('calculateClassBalances', () => {
     expect(brugg.first.incoming.map((student) => student.name)).toEqual(['Léa Martin'])
     expect(brugg.second.outgoing.map((student) => student.name)).toEqual(['Nora Keller'])
   })
+
+  it('affecte la visite à la filière de l’élève qui accueille dans un trio', () => {
+    const students = [
+      { ...student('b1', 'bercher', 'VG', '11VG1'), participation: 'travel_no_host' },
+      student('b2', 'bercher', 'VP', '11VP1'),
+      student('r1', 'brugg', 'Bezirksschule', 'B1'),
+    ]
+    const scenario = { pairings: [{ memberIds: ['b1', 'b2', 'r1'], rotation: 'A', bercherHostClass: '11VP1' }] }
+    const { balances } = calculateClassBalances(scenario, students)
+    expect(balances.find((row) => row.school === 'VP').second.incoming).toBe(1)
+    expect(balances.find((row) => row.school === 'VG').second.incoming).toBe(0)
+
+    const { classes } = calculateClassMovementDetails(scenario, students)
+    expect(classes.find((row) => row.school === 'VP').second.incoming.map((item) => item.id)).toEqual(['r1'])
+    expect(classes.filter((row) => row.school === 'VG').map((row) => row.className)).toEqual(['11VG1'])
+  })
 })

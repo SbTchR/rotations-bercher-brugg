@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createDemoWorkspace } from '../data/demoData'
 import { fullName } from '../lib/compatibility'
+import { canAppendPairings } from '../lib/pairingBatch'
 import { removeStudentsFromPairings, scenarioDecisionLabels, updateScenarioDecision } from '../lib/scenarioParticipation'
 import { cloudEnabled, getSession, loadWorkspace, saveWorkspace, signInWithCredentials, signOut } from '../lib/storage'
 
@@ -75,6 +76,7 @@ export function WorkspaceProvider({ children }) {
     setWorkspace((current) => {
       if (!current) return current
       const next = typeof updater === 'function' ? updater(current) : updater
+      if (next === current) return current
       const stamped = activityText
         ? { ...next, activity: [{ id: crypto.randomUUID(), at: new Date().toISOString(), text: activityText }, ...(next.activity || [])].slice(0, 100) }
         : next
@@ -207,31 +209,39 @@ export function WorkspaceProvider({ children }) {
     },
     addPairing(scenarioId, memberIds, rotation = '', hostClasses = {}) {
       const pairing = { id: crypto.randomUUID(), memberIds, rotation, locked: false, notes: '', ...hostClasses }
-      commit((current) => ({
-        ...current,
-        scenarios: current.scenarios.map((scenario) => scenario.id === scenarioId
-          ? { ...scenario, pairings: [...scenario.pairings, pairing], updatedAt: new Date().toISOString() }
-          : scenario),
-      }), 'Nouveau groupe d’appairage')
+      commit((current) => {
+        const scenario = current.scenarios.find((item) => item.id === scenarioId)
+        if (!canAppendPairings(scenario, [pairing], current.students)) return current
+        return {
+          ...current,
+          scenarios: current.scenarios.map((item) => item === scenario
+            ? { ...scenario, pairings: [...scenario.pairings, pairing], updatedAt: new Date().toISOString() }
+            : item),
+        }
+      }, 'Nouveau groupe d’appairage')
       return pairing.id
     },
-    addPairings(scenarioId, suggestions) {
+    addPairings(scenarioId, suggestions, expectedScenario, expectedStudents) {
       const pairings = suggestions.map((suggestion) => ({
         id: crypto.randomUUID(),
         memberIds: suggestion.memberIds,
         rotation: suggestion.rotation,
-        locked: false,
-        notes: 'Proposé automatiquement — à contrôler.',
+        locked: true,
+        notes: '',
         bercherHostClass: suggestion.bercherHostClass || '',
         bruggHostClass: suggestion.bruggHostClass || '',
       }))
-      commit((current) => ({
-        ...current,
-        scenarios: current.scenarios.map((scenario) => scenario.id === scenarioId
-          ? { ...scenario, pairings: [...scenario.pairings, ...pairings], updatedAt: new Date().toISOString() }
-          : scenario),
-      }), `${pairings.length} binôme${pairings.length > 1 ? 's proposés' : ' proposé'} automatiquement`)
-      return pairings.map((pairing) => pairing.id)
+      commit((current) => {
+        const scenario = current.scenarios.find((item) => item.id === scenarioId)
+        if (scenario !== expectedScenario || current.students !== expectedStudents
+          || !canAppendPairings(scenario, pairings, current.students, true)) return current
+        return {
+          ...current,
+          scenarios: current.scenarios.map((item) => item === scenario
+            ? { ...scenario, pairings: [...scenario.pairings, ...pairings], updatedAt: new Date().toISOString() }
+            : item),
+        }
+      }, `${pairings.length} groupe${pairings.length > 1 ? 's validés' : ' validé'} après appairage automatique`)
     },
     updatePairing(scenarioId, pairingId, updates) {
       commit((current) => ({
@@ -250,6 +260,20 @@ export function WorkspaceProvider({ children }) {
           ? { ...scenario, pairings: scenario.pairings.filter((pairing) => pairing.id !== pairingId), updatedAt: new Date().toISOString() }
           : scenario),
       }), 'Groupe retiré')
+    },
+    restorePairing(scenarioId, pairing, index) {
+      commit((current) => {
+        const scenario = current.scenarios.find((item) => item.id === scenarioId)
+        if (!canAppendPairings(scenario, [pairing], current.students)) return current
+        const pairings = [...scenario.pairings]
+        pairings.splice(index, 0, pairing)
+        return {
+          ...current,
+          scenarios: current.scenarios.map((item) => item === scenario
+            ? { ...scenario, pairings, updatedAt: new Date().toISOString() }
+            : item),
+        }
+      }, 'Groupe restauré')
     },
     updateMeta(updates) {
       commit((current) => ({ ...current, meta: { ...current.meta, ...updates } }), 'Paramètres mis à jour')

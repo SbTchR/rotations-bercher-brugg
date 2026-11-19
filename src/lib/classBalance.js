@@ -37,7 +37,8 @@ export function calculateClassBalances(scenario, students) {
 
     const bercherHostClass = pairing.bercherHostClass || bercher[0].className
     const bruggHostClass = pairing.bruggHostClass || brugg[0].className
-    const bercherHost = rows.get(`${bercher[0].side}|${bercher[0].school}|${bercherHostClass}`) || ensureStudentClass(bercher[0])
+    const bercherHostStudent = bercher.find((student) => student.className === bercherHostClass) || bercher[0]
+    const bercherHost = rows.get(`${bercherHostStudent.side}|${bercherHostStudent.school}|${bercherHostClass}`) || ensureStudentClass(bercherHostStudent)
     const bruggHostStudent = brugg.find((student) => student.className === bruggHostClass) || brugg[0]
     const bruggHost = rows.get(`${bruggHostStudent.side}|${bruggHostStudent.school}|${bruggHostClass}`) || ensureStudentClass(bruggHostStudent)
 
@@ -99,7 +100,8 @@ export function calculateClassMovementDetails(scenario, students) {
     const bruggTravelHalf = pairing.rotation === 'A' ? 'second' : 'first'
     const bercherHostClass = pairing.bercherHostClass || bercher[0].className
     const bruggHostClass = pairing.bruggHostClass || brugg[0].className
-    const bercherHost = ensureClass(bercher[0], bercherHostClass)
+    const bercherHostStudent = bercher.find((student) => student.className === bercherHostClass) || bercher[0]
+    const bercherHost = ensureClass(bercherHostStudent, bercherHostClass)
     const bruggHostStudent = brugg.find((student) => student.className === bruggHostClass) || brugg[0]
     const bruggHost = ensureClass(bruggHostStudent, bruggHostClass)
     const bercherTravelers = bercher.filter((student) => student.participation !== 'host_only')
