@@ -304,6 +304,8 @@ function StudentInspector({ student, students, scenario, result, onClose, onDeci
   const decision = getScenarioDecision(student, scenario)
   const decisionStatus = result ? { maintained: 'pass', declined: 'fail' }[decision] : null
   const checks = result?.memberConditions[student.id] || {}
+  const freeStatus = result ? 'pass' : null
+  const freePartner = !student.conditionType || student.conditionType === 'none'
   const otherInfo = student.otherInfo || [student.animals, student.groupPreference, student.notes].filter(Boolean).join('\n')
   const correspondentNeedsReview = correspondent.candidates.length || correspondent.missingNames.length
     || correspondent.matches.some(({ method }) => method === 'approximate')
@@ -319,9 +321,9 @@ function StudentInspector({ student, students, scenario, result, onClose, onDeci
       </header>
       <div className="student-inspector-title"><GenderMark gender={student.gender} /><div><strong>{fullName(student)}</strong><small>{getTrackLabel(student)}</small></div></div>
       <section className="student-condition-grid" aria-label="Résumé visuel des conditions">
-        <StudentConditionCard icon={Lock} title="Groupe" tone={student.requiredRotation ? 'attention' : 'clear'} status={checks.rotation} value={student.requiredRotation ? 'Groupe ' + student.requiredRotation + ' indispensable' : 'Aucune condition'} />
-        <StudentConditionCard icon={Link2} title="Partenaire" tone={student.conditionType === 'none' ? 'clear' : 'attention'} status={checks.partner} value={student.conditionType === 'named_only' ? 'Personne imposée : ' + (student.namedPartner || 'à renseigner') : conditionLabels[student.conditionType] || 'Libre'} />
-        <StudentConditionCard icon={UsersRound} title="Genre" tone={student.acceptsOtherGender ? 'clear' : 'attention'} status={checks.gender} value={student.acceptsOtherGender ? 'Autre sexe accepté' : 'Même sexe uniquement'} />
+        <StudentConditionCard icon={Lock} title="Groupe" tone={student.requiredRotation ? 'attention' : 'clear'} status={student.requiredRotation ? checks.rotation : freeStatus} value={student.requiredRotation ? 'Groupe ' + student.requiredRotation + ' indispensable' : 'Aucune condition'} />
+        <StudentConditionCard icon={Link2} title="Partenaire" tone={freePartner ? 'clear' : 'attention'} status={freePartner ? freeStatus : checks.partner} value={student.conditionType === 'named_only' ? 'Personne imposée : ' + (student.namedPartner || 'à renseigner') : conditionLabels[student.conditionType] || 'Libre'} />
+        <StudentConditionCard icon={UsersRound} title="Genre" tone={student.acceptsOtherGender ? 'clear' : 'attention'} status={student.acceptsOtherGender ? freeStatus : checks.gender} value={student.acceptsOtherGender ? 'Autre sexe accepté' : 'Même sexe uniquement'} />
         <StudentConditionCard icon={House} title="Participation" tone={canTravel && places ? 'clear' : 'attention'} status={participationStatus} value={participation} />
         <StudentConditionCard icon={decision === 'declined' ? AlertTriangle : CheckCircle2} title="Décision" tone={decision === 'declined' ? 'attention' : 'clear'} status={decisionStatus}>
           <select aria-label="Maintien dans ce scénario" value={decision} onChange={(event) => onDecisionChange(student, event.target.value)}>
