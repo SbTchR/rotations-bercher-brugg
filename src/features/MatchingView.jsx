@@ -36,6 +36,7 @@ import {
   findStudentByName,
   fullName,
   getCorrespondentStatus,
+  getTrackLabel,
   hostCapacity,
   schoolLabel,
   scenarioStats,
@@ -186,20 +187,27 @@ function UsualBadge({ status }) {
   return <span className={`usual-badge ${status || 'unknown'}`} title={hint}><Icon size={13} aria-hidden="true" />{text}</span>
 }
 
-function PairMember({ student, onInspect }) {
+function PairMember({ student, onInspect, onDiscuss }) {
+  const count = getMatchingComments(student).length
   return (
-    <button type="button" className="pair-member" onClick={() => onInspect(student.id)}>
-      <strong>{fullName(student)}</strong>
-      <span className="pair-member-cues">
-        <small className="school-badge" data-school={student.school}>{student.className || 'Sans classe'}</small>
-        <HostingCue student={student} />
-        <DiscussionBadge count={getMatchingComments(student).length} />
-      </span>
-    </button>
+    <div className="pair-member-tile">
+      <button type="button" className="pair-member" onClick={() => onInspect(student.id)}>
+        <strong>{fullName(student)}</strong>
+        <span className="pair-member-cues">
+          <small className="school-badge" data-school={student.school}>{student.className || 'Sans classe'}</small>
+          <HostingCue student={student} />
+        </span>
+      </button>
+      {count > 0 && (
+        <button type="button" className="member-discussion-badge" aria-label={`Commentaires et questions de ${fullName(student)}`} draggable={false} onClick={() => onDiscuss(student.id)}>
+          <DiscussionBadge count={count} />
+        </button>
+      )}
+    </div>
   )
 }
 
-function PairingCard({ pairing, students, evaluate, selected, onSelect, onInspectStudent, onDragStart, onDragEnd, onRemove, onDiscuss }) {
+function PairingCard({ pairing, students, evaluate, selected, onSelect, onInspectStudent, onDragStart, onDragEnd, onRemove, onDiscuss, onDiscussStudent }) {
   const result = evaluate(pairing.memberIds, pairing.rotation)
   const inspectMember = (id) => onInspectStudent(id, pairing.id)
   const members = pairing.memberIds.map((id) => students.find((student) => student.id === id)).filter(Boolean)
@@ -210,7 +218,7 @@ function PairingCard({ pairing, students, evaluate, selected, onSelect, onInspec
   const groupNames = members.map(fullName).join(', ')
   const commentCount = getMatchingComments(pairing).length
   const startDrag = (event) => {
-    if (event.target.closest('.pairing-card-remove, .pairing-discussion-badge')) {
+    if (event.target.closest('.pairing-card-remove, .pairing-discussion-badge, .member-discussion-badge')) {
       event.preventDefault()
       return
     }
@@ -228,9 +236,9 @@ function PairingCard({ pairing, students, evaluate, selected, onSelect, onInspec
         </button>
       </header>
       <div className="pair-members">
-        <div>{members.filter((student) => student.side === 'bercher').map((student) => <PairMember key={student.id} student={student} onInspect={inspectMember} />)}</div>
+        <div>{members.filter((student) => student.side === 'bercher').map((student) => <PairMember key={student.id} student={student} onInspect={inspectMember} onDiscuss={onDiscussStudent} />)}</div>
         <i aria-hidden="true" />
-        <div>{members.filter((student) => student.side === 'brugg').map((student) => <PairMember key={student.id} student={student} onInspect={inspectMember} />)}{missing > 0 && <span className="missing-member"><strong>Élève introuvable</strong><small>À réparer</small></span>}</div>
+        <div>{members.filter((student) => student.side === 'brugg').map((student) => <PairMember key={student.id} student={student} onInspect={inspectMember} onDiscuss={onDiscussStudent} />)}{missing > 0 && <span className="missing-member"><strong>Élève introuvable</strong><small>À réparer</small></span>}</div>
       </div>
       <footer className="pairing-card-footer">
         <button type="button" className="pairing-card-status" onClick={() => onSelect(pairing.id)} aria-label={`Compatibilité : ${result.score}%`}>{status === 'success' ? <CheckCircle2 /> : <AlertTriangle />}<span>{result.score}%</span></button>
@@ -254,73 +262,89 @@ function InspectorDisclosure({ label, children }) {
   )
 }
 
-function StudentProfileDetails({ student, students }) {
+const conditionMarkers = {
+  pass: { Icon: Check, label: 'Condition respectée' },
+  fail: { Icon: X, label: 'Condition non respectée' },
+  review: { Icon: CircleHelp, label: 'Condition à vérifier' },
+}
+
+function StudentConditionCard({ icon: Icon, title, tone, value, status, children }) {
+  const marker = status && conditionMarkers[status]
+  const color = status === 'pass' ? 'clear' : status ? 'attention' : tone
+
+  return (
+    <div className={'student-condition-card ' + color}>
+      <span className="condition-icon"><Icon aria-hidden="true" /></span>
+      <div>
+        <small>{title}</small>
+        {children || <strong>{value}</strong>}
+      </div>
+      {marker && <span className={'condition-marker ' + status} role="img" aria-label={marker.label} title={marker.label}><marker.Icon size={14} aria-hidden="true" /></span>}
+    </div>
+  )
+}
+
+function StudentInspector({ student, students, scenario, result, onClose, onDecisionChange, onEdit, onDiscuss }) {
   const correspondent = getCorrespondentStatus(student, students)
   const requested = student.conditionType === 'named_only'
     ? findStudentByName(student.namedPartner, students, student.side === 'bercher' ? 'brugg' : 'bercher')
     : null
-  const otherInfo = student.otherInfo || [student.animals, student.groupPreference, student.notes].filter(Boolean).join('\n')
-
-  return (
-    <InspectorDisclosure label="Informations de la fiche">
-      <dl className="student-profile-details">
-        <div>
-          <dt>Correspondants habituels</dt>
-          <dd>
-            {correspondent.name || 'Non renseignés'}
-            {correspondent.matches.length > 0 && <small>Retrouvés · {correspondent.matches.map(({ student: match, method }) => fullName(match) + (method === 'approximate' ? ' (nom proche)' : '')).join(', ')}</small>}
-            {correspondent.candidates.length > 0 && <small>À préciser · {correspondent.candidates.map(fullName).join(', ')}</small>}
-            {correspondent.missingNames.length > 0 && <small>Fiches introuvables · {correspondent.missingNames.join(', ')}</small>}
-          </dd>
-        </div>
-        <div>
-          <dt>Partenaire</dt>
-          <dd>
-            {conditionLabels[student.conditionType] || 'Libre'}
-            {student.conditionType === 'named_only' && <small>{requested ? fullName(requested) : student.namedPartner || 'Nom à renseigner'}</small>}
-          </dd>
-        </div>
-        <div><dt>Genre du partenaire</dt><dd>{student.acceptsOtherGender ? 'Autre sexe accepté' : 'Même sexe uniquement'}</dd></div>
-        {otherInfo && <div><dt>Autres infos utiles</dt><dd>{otherInfo}</dd></div>}
-      </dl>
-    </InspectorDisclosure>
-  )
-}
-
-function StudentInspector({ student, students, scenario, group, result, onClose, onDecisionChange, onEdit, onDiscuss }) {
   const places = hostCapacity(student)
-  const participationLabel = student.participation === 'host_only'
-    ? 'Accueil sans voyage'
-    : places ? 'Voyage et accueil' : 'Voyage sans accueil'
+  const canTravel = student.participation !== 'host_only'
+  const participationLabel = !canTravel ? 'Accueille uniquement — ne voyage pas'
+    : places ? 'Participe et peut accueillir' : 'Participe sans pouvoir accueillir'
+  const participationStatus = result
+    ? canTravel && Object.values(result.hosting).every(({ sufficient }) => sufficient) ? 'pass' : 'fail'
+    : null
+  const participation = [
+    participationLabel,
+    places === 1 ? '1 place' : places > 1 ? `${places} places` : null,
+    canTravel && participationStatus === 'fail' ? 'Accueil du groupe insuffisant' : null,
+  ].filter(Boolean).join(' · ')
+  const decision = getScenarioDecision(student, scenario)
+  const decisionStatus = result ? { maintained: 'pass', declined: 'fail' }[decision] : null
+  const checks = result?.memberConditions[student.id] || {}
+  const otherInfo = student.otherInfo || [student.animals, student.groupPreference, student.notes].filter(Boolean).join('\n')
+  const correspondentNeedsReview = correspondent.candidates.length || correspondent.missingNames.length
+    || correspondent.matches.some(({ method }) => method === 'approximate')
 
   return (
     <aside className="pairing-inspector student-inspector" aria-label={'Fiche de ' + fullName(student)}>
       <header>
-        <div>
-          <h2>{fullName(student)}</h2>
-          <small className="school-name" data-school={student.school}>{schoolLabel(student.school)} · {student.className || 'Sans classe'}</small>
-        </div>
+        <div><h2>Conditions de l’élève</h2><small className="school-name" data-school={student.school}>{schoolLabel(student.school)} · {student.className || 'Sans classe'}</small></div>
         <span className="student-inspector-actions">
           <button type="button" className="icon-button" onClick={() => onEdit(student.id)} aria-label="Modifier la fiche" title="Modifier la fiche"><Pencil size={16} /></button>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Fermer"><X /></button>
         </span>
       </header>
-      <div className="student-inspector-summary">
-        <GenderMark gender={student.gender} />
+      <div className="student-inspector-title"><GenderMark gender={student.gender} /><div><strong>{fullName(student)}</strong><small>{getTrackLabel(student)}</small></div></div>
+      <section className="student-condition-grid" aria-label="Résumé visuel des conditions">
+        <StudentConditionCard icon={Lock} title="Groupe" tone={student.requiredRotation ? 'attention' : 'clear'} status={checks.rotation} value={student.requiredRotation ? 'Groupe ' + student.requiredRotation + ' indispensable' : 'Aucune condition'} />
+        <StudentConditionCard icon={Link2} title="Partenaire" tone={student.conditionType === 'none' ? 'clear' : 'attention'} status={checks.partner} value={student.conditionType === 'named_only' ? 'Personne imposée : ' + (student.namedPartner || 'à renseigner') : conditionLabels[student.conditionType] || 'Libre'} />
+        <StudentConditionCard icon={UsersRound} title="Genre" tone={student.acceptsOtherGender ? 'clear' : 'attention'} status={checks.gender} value={student.acceptsOtherGender ? 'Autre sexe accepté' : 'Même sexe uniquement'} />
+        <StudentConditionCard icon={House} title="Participation" tone={canTravel && places ? 'clear' : 'attention'} status={participationStatus} value={participation} />
+        <StudentConditionCard icon={decision === 'declined' ? AlertTriangle : CheckCircle2} title="Décision" tone={decision === 'declined' ? 'attention' : 'clear'} status={decisionStatus}>
+          <select aria-label="Maintien dans ce scénario" value={decision} onChange={(event) => onDecisionChange(student, event.target.value)}>
+            {Object.entries(scenarioDecisionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </StudentConditionCard>
+      </section>
+      <section className={'correspondent-card ' + (correspondentNeedsReview ? 'missing' : correspondent.state)}>
+        <Link2 aria-hidden="true" />
         <div>
-          <strong>{participationLabel}</strong>
-          <small>{places > 0 && (places === 1 ? '1 place d’accueil' : places + ' places d’accueil')}{places > 0 && student.requiredRotation ? ' · ' : ''}{student.requiredRotation && ('Bloc ' + student.requiredRotation + ' requis')}</small>
+          <span>Correspondants habituels</span><strong>{correspondent.name || 'Non renseignés'}</strong>
+          {correspondent.matches.length > 0 && <small>Retrouvés · {correspondent.matches.map(({ student: match, method }) => fullName(match) + (method === 'approximate' ? ' (nom proche)' : '')).join(', ')}</small>}
+          {correspondent.candidates.length > 0 && <small>À préciser · {correspondent.candidates.map(fullName).join(', ')}</small>}
+          {correspondent.missingNames.length > 0 && <small>Fiches introuvables · {correspondent.missingNames.join(', ')}</small>}
         </div>
-      </div>
-      {result && <GroupConditionSummary group={group} result={result} />}
+      </section>
+      {student.conditionType === 'named_only' && (
+        <section className={'correspondent-card ' + (requested ? 'found' : 'missing')}>
+          <UserPlus aria-hidden="true" /><div><span>Personne demandée</span><strong>{student.namedPartner || 'Non renseignée'}</strong>{requested && <small>{fullName(requested)} · {requested.className}</small>}</div>
+        </section>
+      )}
+      {otherInfo && <section className="student-extra-details"><h3>Autres infos utiles</h3><p>{otherInfo}</p></section>}
       <DiscussionButton count={getMatchingComments(student).length} onClick={() => onDiscuss(student.id)} />
-      <StudentProfileDetails student={student} students={students} />
-      <label className="scenario-decision">
-        <span>Maintien dans ce scénario</span>
-        <select value={getScenarioDecision(student, scenario)} onChange={(event) => onDecisionChange(student, event.target.value)}>
-          {Object.entries(scenarioDecisionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
-      </label>
     </aside>
   )
 }
@@ -401,17 +425,17 @@ function Inspector({ student, pairing, students, scenario, evaluate, onClose, on
   if (student) {
     const group = pairing || scenario.pairings.find(({ memberIds }) => memberIds.includes(student.id))
     const result = group ? evaluate(group.memberIds, group.rotation) : null
-    return <StudentInspector key={student.id} student={student} students={students} scenario={scenario} group={group} result={result} onClose={onClose} onDecisionChange={onDecisionChange} onEdit={onEditStudent} onDiscuss={onDiscussStudent} />
+    return <StudentInspector key={student.id} student={student} students={students} scenario={scenario} result={result} onClose={onClose} onDecisionChange={onDecisionChange} onEdit={onEditStudent} onDiscuss={onDiscussStudent} />
   }
   if (pairing) return <GroupInspector key={pairing.id} pairing={pairing} students={students} evaluate={evaluate} scenarioId={scenario.id} onClose={onClose} onRemove={onRemove} onRotate={onRotate} onDiscuss={onDiscussPairing} />
   return null
 }
 
-function RotationBlock({ rotation, pairings, students, evaluate, selectedPairingId, onSelect, onInspectStudent, onRemove, onDiscuss, description, onDrop, onDragStart, onDragEnd, onDragHover, dropTarget }) {
+function RotationBlock({ rotation, pairings, students, evaluate, selectedPairingId, onSelect, onInspectStudent, onRemove, onDiscuss, onDiscussStudent, description, onDrop, onDragStart, onDragEnd, onDragHover, dropTarget }) {
   return (
     <section className={`rotation-block rotation-${rotation.toLowerCase()} ${dropTarget ? 'drop-target' : ''}`} onDragOver={(event) => { event.preventDefault(); onDragHover(rotation) }} onDrop={(event) => onDrop(event, rotation)}>
       <header><div><span>Bloc {rotation}</span><small>{description}</small></div><strong>{pairings.length} groupe{pairings.length > 1 ? 's' : ''}</strong></header>
-      <div className="pairing-stack">{pairings.map((pairing) => <PairingCard key={pairing.id} pairing={pairing} students={students} evaluate={evaluate} selected={pairing.id === selectedPairingId} onSelect={onSelect} onInspectStudent={onInspectStudent} onRemove={onRemove} onDiscuss={onDiscuss} onDragStart={onDragStart} onDragEnd={onDragEnd} />)}{!pairings.length && <p className="empty-block">Déposez un groupe ici.</p>}</div>
+      <div className="pairing-stack">{pairings.map((pairing) => <PairingCard key={pairing.id} pairing={pairing} students={students} evaluate={evaluate} selected={pairing.id === selectedPairingId} onSelect={onSelect} onInspectStudent={onInspectStudent} onRemove={onRemove} onDiscuss={onDiscuss} onDiscussStudent={onDiscussStudent} onDragStart={onDragStart} onDragEnd={onDragEnd} />)}{!pairings.length && <p className="empty-block">Déposez un groupe ici.</p>}</div>
     </section>
   )
 }
@@ -571,9 +595,9 @@ export default function MatchingView() {
         <section className="pairing-canvas">
           <header><h2>Blocs d’échange</h2></header>
           <div className="rotation-block-grid">
-            <RotationBlock rotation="A" pairings={blockA} students={workspace.students} evaluate={evaluate} selectedPairingId={selectedPairingId} onSelect={selectPairing} onInspectStudent={inspectPairMember} onRemove={removeGroup} onDiscuss={discussPairing} description="Bercher voyage d’abord" onDrop={movePairing} onDragStart={beginDrag} onDragEnd={() => { setDraggedPairingId(null); setDropTarget(null) }} onDragHover={setDropTarget} dropTarget={dropTarget === 'A'} />
-            <RotationBlock rotation="B" pairings={blockB} students={workspace.students} evaluate={evaluate} selectedPairingId={selectedPairingId} onSelect={selectPairing} onInspectStudent={inspectPairMember} onRemove={removeGroup} onDiscuss={discussPairing} description="Brugg voyage d’abord" onDrop={movePairing} onDragStart={beginDrag} onDragEnd={() => { setDraggedPairingId(null); setDropTarget(null) }} onDragHover={setDropTarget} dropTarget={dropTarget === 'B'} />
-            {!!undecided.length && <section className="rotation-block rotation-undecided"><header><div><span>À décider</span><small>Bloc encore non attribué</small></div><strong>{undecided.length} groupe{undecided.length > 1 ? 's' : ''}</strong></header><div className="pairing-stack">{undecided.map((pairing) => <PairingCard key={pairing.id} pairing={pairing} students={workspace.students} evaluate={evaluate} selected={pairing.id === selectedPairingId} onSelect={selectPairing} onInspectStudent={inspectPairMember} onRemove={removeGroup} onDiscuss={discussPairing} onDragStart={beginDrag} onDragEnd={() => { setDraggedPairingId(null); setDropTarget(null) }} />)}</div></section>}
+            <RotationBlock rotation="A" pairings={blockA} students={workspace.students} evaluate={evaluate} selectedPairingId={selectedPairingId} onSelect={selectPairing} onInspectStudent={inspectPairMember} onRemove={removeGroup} onDiscuss={discussPairing} onDiscussStudent={discussStudent} description="Bercher voyage d’abord" onDrop={movePairing} onDragStart={beginDrag} onDragEnd={() => { setDraggedPairingId(null); setDropTarget(null) }} onDragHover={setDropTarget} dropTarget={dropTarget === 'A'} />
+            <RotationBlock rotation="B" pairings={blockB} students={workspace.students} evaluate={evaluate} selectedPairingId={selectedPairingId} onSelect={selectPairing} onInspectStudent={inspectPairMember} onRemove={removeGroup} onDiscuss={discussPairing} onDiscussStudent={discussStudent} description="Brugg voyage d’abord" onDrop={movePairing} onDragStart={beginDrag} onDragEnd={() => { setDraggedPairingId(null); setDropTarget(null) }} onDragHover={setDropTarget} dropTarget={dropTarget === 'B'} />
+            {!!undecided.length && <section className="rotation-block rotation-undecided"><header><div><span>À décider</span><small>Bloc encore non attribué</small></div><strong>{undecided.length} groupe{undecided.length > 1 ? 's' : ''}</strong></header><div className="pairing-stack">{undecided.map((pairing) => <PairingCard key={pairing.id} pairing={pairing} students={workspace.students} evaluate={evaluate} selected={pairing.id === selectedPairingId} onSelect={selectPairing} onInspectStudent={inspectPairMember} onRemove={removeGroup} onDiscuss={discussPairing} onDiscussStudent={discussStudent} onDragStart={beginDrag} onDragEnd={() => { setDraggedPairingId(null); setDropTarget(null) }} />)}</div></section>}
           </div>
           <div className={`drop-zone ${canCreate ? 'ready' : ''}`}><UserPlus /><strong>{canCreate ? `Créer un groupe avec ${selectedIds.size} élèves` : 'Sélectionnez les élèves des deux écoles'}</strong><div className="new-group-controls"><span>Placer dans</span><button type="button" className={newGroupRotation === 'A' ? 'active' : ''} onClick={() => setNewGroupRotation('A')}>Bloc A</button><button type="button" className={newGroupRotation === 'B' ? 'active' : ''} onClick={() => setNewGroupRotation('B')}>Bloc B</button><button className="primary-button compact" disabled={!canCreate} onClick={createGroup}>Créer</button></div></div>
         </section>

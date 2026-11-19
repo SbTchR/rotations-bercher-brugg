@@ -91,6 +91,18 @@ describe('evaluatePairing', () => {
     expect(status).toMatchObject({ state: 'found', method: 'approximate', student: brugg })
     expect(evaluatePairing(['b', 'r'], students, 'A')).toMatchObject({ conflicts: [] })
     expect(evaluatePairing(['b', 'r'], students, 'A').warnings.join(' ')).toContain('reconnu par rapprochement')
+    expect(evaluatePairing(['b', 'r'], students, 'A').memberConditions.b.partner).toBe('review')
+  })
+
+  it('reports the checks for each pupil in the group', () => {
+    const bercher = { ...base, id: 'b', side: 'bercher', name: 'Alice Martin', gender: 'female', acceptsOtherGender: false, requiredRotation: 'A', conditionType: 'regular_only', regularCorrespondents: 'Zoé Weber' }
+    const brugg = { ...base, id: 'r', side: 'brugg', name: 'Zoé Weber', gender: 'female', requiredRotation: 'B', acceptsOtherGender: true }
+    expect(evaluatePairing(['b', 'r'], [bercher, brugg], 'A').memberConditions).toEqual({
+      b: { gender: 'pass', rotation: 'pass', partner: 'pass' },
+      r: { gender: null, rotation: 'fail' },
+    })
+    expect(evaluatePairing(['b', 'r'], [bercher, { ...brugg, gender: 'male' }], '').memberConditions.b)
+      .toMatchObject({ gender: 'fail', rotation: 'review' })
   })
 
   it('resolves each listed usual correspondent and evaluates a match with any of them', () => {

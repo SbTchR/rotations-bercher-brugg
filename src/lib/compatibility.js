@@ -209,12 +209,22 @@ function hostingAvailability(hosts, visitors, scenario) {
 
 const uniqueConditions = (items) => items.filter((item, index, array) => array.findIndex((candidate) => candidate.label === item.label) === index)
 
+function assessGender(student, partners) {
+  if (student.acceptsOtherGender) return { state: null }
+  const known = ['female', 'male'].includes(student.gender)
+  const incompatible = known && partners.find((partner) => partner.gender && partner.gender !== 'unspecified' && partner.gender !== student.gender)
+  if (incompatible) return { state: 'fail', incompatible }
+  if (!known || partners.some((partner) => !['female', 'male'].includes(partner.gender))) return { state: 'review' }
+  return { state: partners.length ? 'pass' : null }
+}
+
 function evaluate(memberIds, rotation, byId, getRelations, scenario) {
   const members = memberIds.map((id) => byId.get(id)).filter(Boolean)
   const bercher = members.filter((student) => student.side === 'bercher')
   const brugg = members.filter((student) => student.side === 'brugg')
   const indispensable = []
   const optional = []
+  const memberConditions = Object.fromEntries(members.map((student) => [student.id, {}]))
   const addEssential = (state, label) => indispensable.push({ state, label })
   const addOptional = (state, label) => optional.push({ state, label })
 
@@ -242,19 +252,20 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
     if (student.status === 'review') addOptional('review', `Fiche de ${fullName(student)} à vérifier.`)
   }
 
+  const genderAssessments = members.map((student) => {
+    const partners = student.side === 'bercher' ? brugg : bercher
+    const assessment = assessGender(student, partners)
+    memberConditions[student.id].gender = assessment.state
+    return { student, ...assessment }
+  })
   if (members.length === 2 && members[0].gender === members[1].gender && ['female', 'male'].includes(members[0].gender)) {
     addEssential('pass', `Les deux élèves sont des ${members[0].gender === 'female' ? 'filles' : 'garçons'}.`)
   } else {
-    const genderFailures = members.flatMap((student) => {
-      if (student.acceptsOtherGender || !['female', 'male'].includes(student.gender)) return []
-      const opposite = student.side === 'bercher' ? brugg : bercher
-      const incompatible = opposite.find((item) => item.gender && item.gender !== 'unspecified' && item.gender !== student.gender)
+    const genderFailures = genderAssessments.flatMap(({ student, incompatible }) => {
       return incompatible ? [`${fullName(student)} ne peut pas être avec ${incompatible.gender === 'male' ? 'un garçon' : 'une fille'}.`] : []
     })
     if (genderFailures.length) genderFailures.forEach((label) => addEssential('fail', label))
-    else if (members.some((student) => student.acceptsOtherGender === false
-      && (![ 'female', 'male' ].includes(student.gender)
-        || members.some((partner) => partner.side !== student.side && ![ 'female', 'male' ].includes(partner.gender))))) {
+    else if (genderAssessments.some(({ student, state }) => student.acceptsOtherGender === false && state === 'review')) {
       addEssential('review', 'Le genre doit être renseigné pour vérifier la condition de partenaire du même sexe.')
     } else addEssential('pass', members.every((student) => student.acceptsOtherGender) ? 'Les élèves acceptent un partenaire de l’autre sexe.' : 'La condition de genre est respectée.')
   }
@@ -263,6 +274,7 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
   if (!requiredGroups.length) addEssential('pass', 'Pas de condition de groupe spécifiée.')
   else {
     for (const student of requiredGroups) {
+      memberConditions[student.id].rotation = !rotation ? 'review' : rotation === student.requiredRotation ? 'pass' : 'fail'
       if (!rotation) addEssential('review', `${fullName(student)} ne peut participer que dans le groupe ${student.requiredRotation}.`)
       else if (rotation !== student.requiredRotation) addEssential('fail', `${fullName(student)} ne peut pas être dans le groupe ${rotation}.`)
       else addOptional('pass', `${fullName(student)} est dans le groupe demandé (${rotation}).`)
@@ -280,6 +292,11 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
     const requestedNamed = memberIds.includes(named.student?.id)
     const hasAmbiguousRegularInGroup = regular.candidates.some((candidate) => memberIds.includes(candidate.id))
     const ambiguousRegular = `Plusieurs élèves correspondent au nom indiqué par ${fullName(student)}.`
+    const addPartnerCondition = (state, label) => {
+      memberConditions[student.id].partner = state === 'pass' && student.conditionType === 'regular_only'
+        && !requestedMatches.some(({ method }) => method === 'exact') ? 'review' : state
+      addEssential(state, label)
+    }
 
     if (requestedRegular) {
       regularLinksById.set(student.id, requestedMatches.map(({ student: match }) => match.id))
@@ -293,22 +310,22 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
     }
 
     if (student.conditionType === 'regular_only') {
-      if (regular.state === 'empty') addEssential('review', `Le correspondant habituel exigé par ${fullName(student)} n’est pas renseigné.`)
-      else if (requestedRegular) addEssential('pass', `${fullName(student)} retrouve ${matchedNames} parmi ses correspondants habituels, comme demandé.`)
-      else if (regular.state === 'ambiguous' || hasAmbiguousRegularInGroup) addEssential('review', ambiguousRegular)
-      else addEssential('fail', `Aucun des correspondants habituels exigés par ${fullName(student)} ne figure dans le groupe.`)
+      if (regular.state === 'empty') addPartnerCondition('review', `Le correspondant habituel exigé par ${fullName(student)} n’est pas renseigné.`)
+      else if (requestedRegular) addPartnerCondition('pass', `${fullName(student)} retrouve ${matchedNames} parmi ses correspondants habituels, comme demandé.`)
+      else if (regular.state === 'ambiguous' || hasAmbiguousRegularInGroup) addPartnerCondition('review', ambiguousRegular)
+      else addPartnerCondition('fail', `Aucun des correspondants habituels exigés par ${fullName(student)} ne figure dans le groupe.`)
     }
     if (student.conditionType === 'named_only') {
-      if (named.state === 'empty') addEssential('fail', `La personne choisie par ${fullName(student)} n’est pas renseignée.`)
-      else if (named.state === 'ambiguous') addEssential('review', `Plusieurs élèves correspondent au nom de la personne choisie par ${fullName(student)}.`)
-      else if (!requestedNamed) addEssential('fail', `${fullName(student)} n’est pas avec le partenaire choisi en condition sine qua non.`)
-      else addEssential('pass', `${fullName(student)} est avec le partenaire choisi en condition sine qua non.`)
+      if (named.state === 'empty') addPartnerCondition('fail', `La personne choisie par ${fullName(student)} n’est pas renseignée.`)
+      else if (named.state === 'ambiguous') addPartnerCondition('review', `Plusieurs élèves correspondent au nom de la personne choisie par ${fullName(student)}.`)
+      else if (!requestedNamed) addPartnerCondition('fail', `${fullName(student)} n’est pas avec le partenaire choisi en condition sine qua non.`)
+      else addPartnerCondition('pass', `${fullName(student)} est avec le partenaire choisi en condition sine qua non.`)
     }
     if (student.conditionType === 'different_only') {
-      if (regular.state === 'empty') addEssential('review', `Le correspondant actuel de ${fullName(student)} n’est pas renseigné : cette condition doit être vérifiée.`)
-      else if (requestedRegular) addEssential('fail', `${fullName(student)} ne veut pas être avec ${matchedNames}.`)
-      else if (hasAmbiguousRegularInGroup) addEssential('review', ambiguousRegular)
-      else addEssential('pass', `${fullName(student)} n’est pas avec son correspondant habituel.`)
+      if (regular.state === 'empty') addPartnerCondition('review', `Le correspondant actuel de ${fullName(student)} n’est pas renseigné : cette condition doit être vérifiée.`)
+      else if (requestedRegular) addPartnerCondition('fail', `${fullName(student)} ne veut pas être avec ${matchedNames}.`)
+      else if (hasAmbiguousRegularInGroup) addPartnerCondition('review', ambiguousRegular)
+      else addPartnerCondition('pass', `${fullName(student)} n’est pas avec son correspondant habituel.`)
     }
     if (student.conditionType === 'none' && regular.state !== 'empty') {
       if (!requestedRegular && (regular.state === 'ambiguous' || hasAmbiguousRegularInGroup)) addOptional('review', ambiguousRegular)
@@ -350,7 +367,7 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
   const respected = [...cleanEssential.filter((item) => item.state === 'pass'), ...cleanOptional.filter((item) => item.state === 'pass')].map((item) => item.label)
   const rawScore = 100 - conflicts.length * 30 - warnings.length * 5
   const score = Math.max(0, Math.min(warnings.length ? 94 : 100, rawScore))
-  return { score, respected, warnings, conflicts, hosting, usualStatus, regularLinks, conditions: { indispensable: cleanEssential, optional: cleanOptional } }
+  return { score, respected, warnings, conflicts, hosting, usualStatus, regularLinks, memberConditions, conditions: { indispensable: cleanEssential, optional: cleanOptional } }
 }
 
 export function createPairingEvaluator(students, scenario) {

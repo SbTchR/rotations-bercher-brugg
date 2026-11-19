@@ -380,6 +380,9 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .pair-members > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .pair-member, .pair-members > div > span { display: grid; gap: 3px; min-width: 0; min-height: 35px; padding: 5px; border: 1px solid var(--border); border-radius: 7px; background: #fbfdfe; text-align: left; }
 .pair-member:hover { border-color: var(--teal); background: var(--teal-soft); }
+.pair-member-tile { position: relative; min-width: 0; }
+.pair-member-tile .pair-member { width: 100%; }
+.pair-member-tile:has(.member-discussion-badge) .pair-member-cues { min-height: 26px; padding-inline-end: 36px; }
 .pair-members strong { overflow-wrap: anywhere; font-size: .76rem; line-height: 1.25; }
 .pair-members small { color: var(--school-ink, var(--muted)); font-size: .7rem; overflow-wrap: anywhere; }
 .pair-member .school-badge { max-width: 100%; padding: 2px 4px; gap: 4px; }
@@ -412,12 +415,36 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .student-inspector > header small { font-size: .74rem; }
 .student-inspector-actions { display: flex; flex: 0 0 auto; gap: 2px; }
 .student-inspector-actions .icon-button { width: 32px; height: 32px; }
-.student-inspector-summary { display: flex; align-items: center; gap: 8px; padding: 11px 13px; }
-.student-inspector-summary .gender-mark { flex: 0 0 26px; }
-.student-inspector-summary > div { display: grid; gap: 3px; }
-.student-inspector-summary strong { font-size: .82rem; }
-.student-inspector-summary small, .student-group-conditions header small { color: var(--muted); font-size: .73rem; }
-.student-inspector-summary small:empty { display: none; }
+.student-inspector-title { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 15px 13px 10px; }
+.student-inspector-title > div { display: grid; gap: 3px; }
+.student-inspector-title strong { font-size: .86rem; overflow-wrap: anywhere; }
+.student-inspector-title small, .student-group-conditions header small { color: var(--muted); font-size: .73rem; }
+.student-condition-grid { display: grid; gap: 7px; margin: 6px 13px 12px; }
+.student-condition-card { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 9px; min-height: 54px; padding: 7px 8px; border: 1px solid; border-radius: 9px; }
+.condition-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; }
+.condition-icon svg { width: 17px; height: 17px; }
+.student-condition-card > div { display: grid; gap: 3px; min-width: 0; }
+.student-condition-card small { font-size: .65rem; font-weight: 750; text-transform: uppercase; letter-spacing: .035em; }
+.student-condition-card strong { font-size: .76rem; line-height: 1.33; overflow-wrap: anywhere; }
+.student-condition-card select { justify-self: start; width: min(100%, 155px); padding: 3px 6px; font-size: .76rem; }
+.student-condition-card.clear { color: var(--success-text); border-color: #c9e3cd; background: #f7fcf4; }
+.student-condition-card.clear .condition-icon { background: var(--green-soft); }
+.student-condition-card.attention { color: var(--warning-text); border-color: #eed7ab; background: #fffbf1; }
+.student-condition-card.attention .condition-icon { background: var(--warning-bg); }
+.condition-marker { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; }
+.condition-marker.pass { color: var(--success-text); background: var(--green-soft); }
+.condition-marker.fail { color: var(--danger-text); background: var(--coral-soft); }
+.condition-marker.review { color: var(--warning-text); background: var(--warning-bg); }
+.correspondent-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; align-items: start; margin: 8px 13px; padding: 9px; border: 1px solid var(--border); border-radius: 8px; }
+.correspondent-card > svg { width: 17px; height: 17px; }
+.correspondent-card > div { display: grid; gap: 3px; overflow-wrap: anywhere; }
+.correspondent-card span, .correspondent-card small { color: var(--muted); font-size: .72rem; }
+.correspondent-card strong { font-size: .8rem; }
+.correspondent-card.found { color: var(--success-text); border-color: #c9e3cd; background: #f7fcf4; }
+.correspondent-card.missing { color: var(--warning-text); border-color: #eed7ab; background: #fffbf1; }
+.student-extra-details { margin: 10px 13px; padding-top: 8px; border-top: 1px solid var(--border); }
+.student-extra-details h3, .student-extra-details p { margin: 0; font-size: .78rem; }
+.student-extra-details p { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .group-inspector-members { margin: 10px 13px; color: var(--navy); font-size: .82rem; font-weight: 700; overflow-wrap: anywhere; }
 .student-group-conditions { margin: 0 13px; padding: 9px 9px 0; border: 1px solid var(--border); border-radius: 8px; }
 .student-group-conditions > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -441,12 +468,6 @@ input[type="radio"], input[type="checkbox"] { width: 16px; height: 16px; padding
 .condition-detail ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .condition-detail li { display: grid; grid-template-columns: auto 1fr; gap: 5px; color: var(--navy); font-size: .75rem; line-height: 1.35; }
 .condition-detail li svg { margin-top: 2px; }
-.student-profile-details { display: grid; gap: 8px; margin: 0 0 10px; font-size: .79rem; }
-.student-profile-details dt { margin-bottom: 2px; color: var(--muted); font-size: .72rem; }
-.student-profile-details dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.student-profile-details dd small { display: block; color: var(--muted); }
-.pairing-inspector > .scenario-decision { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 0; padding-top: 9px; border-top: 1px solid var(--border); }
-.scenario-decision select { padding-inline: 7px; }
 .host-class-grid { display: grid; gap: 8px; margin-bottom: 9px; }
 .host-class-control { display: grid; gap: 5px; color: #354967; font-size: .72rem; font-weight: 650; }
 .inspector-actions { display: flex; flex-wrap: wrap; gap: 7px; padding: 9px 13px; }
