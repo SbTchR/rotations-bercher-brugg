@@ -99,8 +99,28 @@ describe('evaluatePairing', () => {
       { ...base, id: 'r1', side: 'brugg', name: 'Nora Keller' },
       { ...base, id: 'r2', side: 'brugg', name: 'Zoé Weber' },
     ]
-    expect(getCorrespondentStatus(bercher, students).matches.map((match) => match.student.id)).toEqual(['r1', 'r2'])
+    const status = getCorrespondentStatus(bercher, students)
+    expect(status.matches.map((match) => match.student.id)).toEqual(['r1', 'r2'])
+    expect(status.missingNames).toEqual(['Personne absente'])
     expect(evaluatePairing(['b', 'r2'], students, 'A').conflicts).toEqual([])
+  })
+
+  it('keeps two separate correspondents even if both entries form a third name', () => {
+    const bercher = { ...base, id: 'b', side: 'bercher', regularCorrespondents: 'Nora, Zoé Weber' }
+    const students = [
+      bercher,
+      { ...base, id: 'r1', side: 'brugg', name: 'Nora' },
+      { ...base, id: 'r2', side: 'brugg', name: 'Zoé Weber' },
+      { ...base, id: 'r3', side: 'brugg', name: 'Nora Zoé Weber' },
+    ]
+    expect(getCorrespondentStatus(bercher, students).matches.map(({ student }) => student.id)).toEqual(['r1', 'r2'])
+  })
+
+  it('checks the third correspondent for both usual-partner conditions', () => {
+    const bercher = { ...base, id: 'b', side: 'bercher', name: 'Alice Martin', conditionType: 'regular_only', regularCorrespondents: 'Nora Keller, Sina Roth, Zoé Weber' }
+    const brugg = { ...base, id: 'r', side: 'brugg', name: 'Zoé Weber', regularCorrespondents: 'Alice Martin' }
+    expect(evaluatePairing(['b', 'r'], [bercher, brugg], 'A')).toMatchObject({ conflicts: [], usualStatus: 'mutual', regularLinks: 2 })
+    expect(evaluatePairing(['b', 'r'], [{ ...bercher, conditionType: 'different_only' }, brugg], 'A').conflicts).toEqual(['Alice Martin ne veut pas être avec Zoé Weber.'])
   })
 
   it('prefers exact matches and reports ties across the full opposite roster', () => {

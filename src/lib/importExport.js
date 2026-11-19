@@ -54,7 +54,7 @@ const studentFromModernRow = (row) => {
     participation: normalizedParticipation,
     conditionType: normalizedCondition,
     namedPartner: clean(valueFrom(row, 'Personne demandée', 'Personne précise')),
-    regularCorrespondents: clean(row['Correspondant actuel']),
+    regularCorrespondents: clean(valueFrom(row, 'Correspondants habituels', 'Correspondant actuel')),
     canHost: normalizedParticipation !== 'travel_no_host',
     hostCapacity: row[hostingCapacityColumn],
     acceptsOtherGender: yes(row['Autre sexe accepté']),

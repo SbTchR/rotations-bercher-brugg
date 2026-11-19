@@ -8,7 +8,7 @@ Webapp privée de préparation des inscriptions et appairages pour les échanges
 - distinction VP/VG à Bercher et Bez/Sek à Brugg, avec préférence souple pour VP ↔ Bez et VG ↔ Sek;
 - un seul champ Nom et prénom, genre obligatoire, et participation en trois états (voyage et accueille, voyage sans accueillir, accueille sans voyager);
 - uniquement les élèves qui participent, avec indication simple de l’accueil possible ou impossible;
-- nom du correspondant actuel et détection automatique de sa présence dans l’application;
+- un ou plusieurs correspondants habituels, saisis dans la même fiche et séparés par des virgules, chacun reconnu séparément;
 - correspondant actuel, autre partenaire, personne imposée ou choix libre;
 - préférence non bloquante VP ↔ Bezirksschule et VG ↔ Sekundarschule;
 - autre sexe, rotations A/B et un champ unique « Autres infos utiles »;

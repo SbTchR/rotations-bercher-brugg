@@ -143,10 +143,13 @@ function resolveCorrespondents(student, resolveName) {
   const entries = name.split(/[,;/\r\n]+|\s+(?:ou|oder)\s+/i).map((part) => part.trim()).filter(Boolean)
   let resolutions = entries.map((entry) => resolveName(entry, side, regularCorrespondentOptions))
 
-  // A comma can also introduce the given names in a surname-first entry.
+  // Keep legacy “Surname, Given name” unless a separately identified pupil would be lost.
   if (entries.length === 2 && /^[^,;/\r\n]+,[^,;/\r\n]+$/.test(name) && entries.some((entry) => !entry.includes(' '))) {
     const surnameFirst = resolveName(name, side, regularCorrespondentOptions)
-    if (surnameFirst.state === 'found' || surnameFirst.state === 'ambiguous') resolutions = [surnameFirst]
+    const preservesSeparateMatches = surnameFirst.candidates.every((candidate) => (
+      resolutions.every((entry) => !entry.student || entry.student.id === candidate.id)
+    ))
+    if (surnameFirst.candidates.length && preservesSeparateMatches) resolutions = [surnameFirst]
   }
 
   const matchesById = new Map()
@@ -162,9 +165,10 @@ function resolveCorrespondents(student, resolveName) {
   }
   const matches = [...matchesById.values()]
   const candidates = [...ambiguousById.values()]
+  const missingNames = resolutions.filter((entry) => entry.state === 'missing').map((entry) => entry.name)
   const first = matches[0]
   const state = first ? 'found' : candidates.length ? 'ambiguous' : normalizeName(name) ? 'missing' : 'empty'
-  return { state, name, student: first?.student ?? null, method: first?.method ?? null, candidates, matches }
+  return { state, name, student: first?.student ?? null, method: first?.method ?? null, candidates, matches, missingNames }
 }
 
 export function getCorrespondentStatus(student, students, resolveName = createNameResolver(students)) {
@@ -272,6 +276,7 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
     const { regular, named } = getRelations(student)
     const requestedMatches = regular.matches.filter((match) => memberIds.includes(match.student.id))
     const requestedRegular = requestedMatches[0]
+    const matchedNames = requestedMatches.map(({ student: match }) => fullName(match)).join(', ')
     const requestedNamed = memberIds.includes(named.student?.id)
     const hasAmbiguousRegularInGroup = regular.candidates.some((candidate) => memberIds.includes(candidate.id))
     const ambiguousRegular = `Plusieurs élèves correspondent au nom indiqué par ${fullName(student)}.`
@@ -289,9 +294,9 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
 
     if (student.conditionType === 'regular_only') {
       if (regular.state === 'empty') addEssential('review', `Le correspondant habituel exigé par ${fullName(student)} n’est pas renseigné.`)
-      else if (requestedRegular) addEssential('pass', `${fullName(student)} est avec son correspondant habituel exigé.`)
+      else if (requestedRegular) addEssential('pass', `${fullName(student)} retrouve ${matchedNames} parmi ses correspondants habituels, comme demandé.`)
       else if (regular.state === 'ambiguous' || hasAmbiguousRegularInGroup) addEssential('review', ambiguousRegular)
-      else addEssential('fail', `${fullName(student)} n’est pas avec son correspondant habituel exigé.`)
+      else addEssential('fail', `Aucun des correspondants habituels exigés par ${fullName(student)} ne figure dans le groupe.`)
     }
     if (student.conditionType === 'named_only') {
       if (named.state === 'empty') addEssential('fail', `La personne choisie par ${fullName(student)} n’est pas renseignée.`)
@@ -301,15 +306,15 @@ function evaluate(memberIds, rotation, byId, getRelations, scenario) {
     }
     if (student.conditionType === 'different_only') {
       if (regular.state === 'empty') addEssential('review', `Le correspondant actuel de ${fullName(student)} n’est pas renseigné : cette condition doit être vérifiée.`)
-      else if (requestedRegular) addEssential('fail', `${fullName(student)} ne veut pas être avec ${student.regularCorrespondents}.`)
+      else if (requestedRegular) addEssential('fail', `${fullName(student)} ne veut pas être avec ${matchedNames}.`)
       else if (hasAmbiguousRegularInGroup) addEssential('review', ambiguousRegular)
       else addEssential('pass', `${fullName(student)} n’est pas avec son correspondant habituel.`)
     }
     if (student.conditionType === 'none' && regular.state !== 'empty') {
       if (!requestedRegular && (regular.state === 'ambiguous' || hasAmbiguousRegularInGroup)) addOptional('review', ambiguousRegular)
       else addOptional(requestedRegular ? 'pass' : 'review', requestedRegular
-        ? `${fullName(student)} est avec le partenaire choisi (correspondant de base).`
-        : `${fullName(student)} n’est pas avec le partenaire choisi (${student.regularCorrespondents}).`)
+        ? `${fullName(student)} retrouve ${matchedNames} parmi ses correspondants habituels.`
+        : `Aucun correspondant habituel de ${fullName(student)} ne figure dans ce groupe (${student.regularCorrespondents}).`)
     }
     if (student.conditionType === 'none' && named.state !== 'empty') {
       addOptional(requestedNamed ? 'pass' : 'review', requestedNamed

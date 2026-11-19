@@ -10,8 +10,8 @@ const participationOptions = [
 
 const conditionOptions = [
   ['none', 'Libre — sans exigence sur le partenaire'],
-  ['regular_only', 'Son correspondant actuel uniquement'],
-  ['different_only', 'Une autre personne que son correspondant'],
+  ['regular_only', 'Un de ses correspondants habituels uniquement'],
+  ['different_only', 'Aucun de ses correspondants habituels'],
   ['named_only', 'Une personne précise uniquement'],
 ]
 
@@ -25,8 +25,9 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
     event.preventDefault()
     onSave({ ...draft, hostCapacity: hostCapacity(draft), status: isStudentEnrollmentComplete(draft) ? 'complete' : 'review' })
   }
-  const correspondent = getCorrespondentStatus(draft, students)
-  const hasCloseName = correspondent.matches.some(({ method }) => method === 'approximate')
+  const { state, matches, candidates, missingNames } = getCorrespondentStatus(draft, students)
+  const needsReview = candidates.length > 0 || missingNames.length > 0 || matches.some(({ method }) => method === 'approximate')
+  const CorrespondentIcon = needsReview ? CircleDashed : CheckCircle2
   const hostingPossible = !cannotHost(draft)
   return (
     <div className="drawer-layer">
@@ -51,23 +52,20 @@ export default function StudentDrawer({ student, students, onClose, onSave }) {
           </section>
 
           <section className="correspondent-section">
-            <h3>Correspondant actuel</h3>
-            <label>Nom du correspondant habituel<input value={draft.regularCorrespondents} onChange={(event) => update('regularCorrespondents', event.target.value)} placeholder="Nom et prénom" /></label>
-            {correspondent.state === 'found' ? (
-              <div className={`correspondent-state ${hasCloseName ? 'missing' : 'found'}`}>
-                <CheckCircle2 />
+            <label>Correspondants habituels
+              <textarea rows="2" value={draft.regularCorrespondents ?? ''} onChange={(event) => update('regularCorrespondents', event.target.value)} aria-describedby="correspondents-help" placeholder="Nora Keller, Zoé Weber, Léa Müller" />
+            </label>
+            <p id="correspondents-help" className="field-help">Saisissez le prénom et le nom de chacun. Séparez les personnes par des virgules.</p>
+            {state !== 'empty' && (
+              <div className={`correspondent-state ${needsReview ? 'missing' : 'found'}`}>
+                <CorrespondentIcon aria-hidden="true" />
                 <span>
-                  <strong>{hasCloseName ? 'Nom proche reconnu' : 'Déjà ajouté dans l’application'}</strong>
-                  <small>{correspondent.matches.map(({ student }) => `${fullName(student)} · ${student.className}`).join(' / ')}</small>
-                  {correspondent.candidates.length > 0 && <small>Noms à préciser · {correspondent.candidates.map(fullName).join(' · ')}</small>}
+                  {matches.length > 0 && <strong>{matches.length} {matches.length === 1 ? 'correspondant reconnu' : 'correspondants reconnus'}</strong>}
+                  {matches.map(({ student, method }) => <small key={student.id}>{[fullName(student), student.className, method === 'approximate' && 'Nom proche'].filter(Boolean).join(' · ')}</small>)}
+                  {candidates.length > 0 && <small>Noms à préciser · {candidates.map(fullName).join(', ')}</small>}
+                  {missingNames.length > 0 && <small>Fiches introuvables · {missingNames.join(', ')}</small>}
                 </span>
               </div>
-            ) : correspondent.state === 'ambiguous' ? (
-              <div className="correspondent-state missing"><CircleDashed /><span><strong>Plusieurs noms possibles</strong><small>{correspondent.candidates.map(fullName).join(' · ')}. Précisez le nom pour identifier le correspondant.</small></span></div>
-            ) : correspondent.state === 'missing' ? (
-              <div className="correspondent-state missing"><CircleDashed /><span><strong>Pas encore ajouté</strong><small>Cette personne ne participe peut-être pas à l’échange.</small></span></div>
-            ) : (
-              <div className="correspondent-state empty"><CircleDashed /><span><strong>Aucun nom renseigné</strong><small>Vous pourrez le compléter plus tard.</small></span></div>
             )}
           </section>
 

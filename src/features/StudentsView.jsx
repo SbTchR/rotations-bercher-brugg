@@ -8,7 +8,7 @@ import { cannotHost, createNameResolver, fullName, getCorrespondentStatus, isStu
 const schools = ['all', 'VP', 'VG', 'Bezirksschule', 'Sekundarschule']
 const conditions = {
   none: 'Libre',
-  regular_only: 'Son correspondant',
+  regular_only: 'Un correspondant habituel',
   different_only: 'Autre personne',
 }
 
@@ -18,16 +18,18 @@ function CorrespondentCell({ correspondent }) {
   const found = correspondent.state === 'found'
   const approximate = correspondent.matches.some((match) => match.method === 'approximate')
   const ambiguous = correspondent.candidates.length > 0
-  const Icon = found && !approximate && !ambiguous ? Check : AlertTriangle
+  const partial = found && correspondent.missingNames.length > 0
+  const Icon = found && !approximate && !ambiguous && !partial ? Check : AlertTriangle
 
   return (
-    <span className={`correspondent-chip ${ambiguous ? 'ambiguous' : approximate ? 'approximate' : correspondent.state}`}>
+    <span className={`correspondent-chip ${ambiguous ? 'ambiguous' : approximate ? 'approximate' : partial ? 'missing' : correspondent.state}`}>
       <Icon size={14} aria-hidden="true" />
       <span>
         {found ? correspondent.matches.map(({ student }) => fullName(student)).join(', ') : correspondent.name}
         {(approximate || (found && ambiguous)) && <small>Saisi : {correspondent.name}</small>}
         {approximate && <small>Nom proche reconnu</small>}
         {ambiguous && <small>Plusieurs noms proches</small>}
+        {partial && <small>Fiches introuvables · {correspondent.missingNames.join(', ')}</small>}
         {!found && !ambiguous && <small>Pas encore ajouté</small>}
       </span>
     </span>
@@ -161,7 +163,7 @@ export default function StudentsView() {
           <table className="data-table" role="table" aria-label="Inscriptions des élèves">
             <thead role="rowgroup"><tr role="row">
               <th scope="col" role="columnheader"><label className="select-visible"><input type="checkbox" checked={allVisibleSelected} disabled={!filtered.length} onChange={toggleVisibleSelection} aria-label="Sélectionner tous les élèves affichés" /><span>Sélectionner les élèves affichés</span></label></th>
-              {['Élève', 'Filière', 'Classe', 'Correspondant', 'Accueil', 'Condition', 'Groupe', 'État de la fiche'].map((label) => <th key={label} className="student-column-heading" scope="col" role="columnheader">{label}</th>)}
+              {['Élève', 'Filière', 'Classe', 'Correspondants', 'Accueil', 'Condition', 'Groupe', 'État de la fiche'].map((label) => <th key={label} className="student-column-heading" scope="col" role="columnheader">{label}</th>)}
               <th className="student-column-heading" scope="col" role="columnheader" aria-label="Modifier la fiche" />
             </tr></thead>
             {grouped.map((group) => (
@@ -181,7 +183,7 @@ export default function StudentsView() {
                       <th className="student-table-name" scope="row" role="rowheader"><strong>{name}</strong>{student.legacyImport && <small>Import ancien format</small>}</th>
                       <td className="student-table-school" data-label="Filière" role="cell"><span className="school-badge" data-school={student.school}>{schoolLabel(student.school)}</span></td>
                       <td className="student-table-class" data-label="Classe" role="cell">{student.className || '—'}</td>
-                      <td className="student-table-correspondent" data-label="Correspondant" role="cell"><CorrespondentCell correspondent={correspondent} /></td>
+                      <td className="student-table-correspondent" data-label="Correspondants" role="cell"><CorrespondentCell correspondent={correspondent} /></td>
                       <td data-label="Accueil" role="cell"><HostingCell student={student} /></td>
                       <td data-label="Condition" role="cell">{conditions[student.conditionType] || 'Personne précise'}</td>
                       <td data-label="Groupe" role="cell">{student.requiredRotation ? <span className="rotation-badge" data-rotation={student.requiredRotation}>Seulement {student.requiredRotation}</span> : '—'}</td>
@@ -198,7 +200,7 @@ export default function StudentsView() {
         {!!selected.length && <div className="selection-bar"><span><Check size={16} /> {selected.length} sélectionné{selected.length > 1 ? 's' : ''}</span>{selectedOne && <button onClick={() => setDraft(selectedOne)}>Modifier</button>}<button className="danger-text" onClick={deleteSelected}><Trash2 size={16} /> Supprimer</button><button className="icon-button small" onClick={() => setSelectedIds(new Set())} aria-label="Annuler la sélection"><X /></button></div>}
         <footer className="table-summary">
           <span>{workspace.students.length} inscriptions</span>
-          <span><Check size={15} aria-hidden="true" /> {inscriptions.recognized} correspondants retrouvés</span>
+          <span><Check size={15} aria-hidden="true" /> {inscriptions.recognized} fiches avec correspondants retrouvés</span>
           <span><AlertTriangle size={15} aria-hidden="true" /> {inscriptions.incomplete} fiches à vérifier</span>
           <span><House size={15} aria-hidden="true" /> {inscriptions.withoutHosting} accueils impossibles</span>
         </footer>

@@ -124,6 +124,20 @@ describe('computeProvisionalPlan', () => {
   const bea = pupil('b', 'bercher', 'Béatrice Morel')
   const rita = pupil('r', 'brugg', 'Rita Weiss', { regularCorrespondents: 'Alice Martin', hostCapacity: 2 })
 
+  it('proposes the third usual correspondent when the first two are already assigned', () => {
+    const alice = pupil('a', 'bercher', 'Alice Martin', {
+      regularCorrespondents: 'Rita Weiss, Nina Roth, Zoé Weber',
+      conditionType: 'regular_only',
+    })
+    const nina = pupil('n', 'brugg', 'Nina Roth')
+    const zoe = pupil('z', 'brugg', 'Zoé Weber', { regularCorrespondents: 'Alice Martin' })
+    const emma = pupil('e', 'brugg', 'Emma Meier')
+    const groups = { pairings: [{ memberIds: ['b', 'r'], rotation: 'A' }, { memberIds: ['c', 'n'], rotation: 'B' }] }
+    const plan = computeProvisionalPlan([alice, bea, pupil('c', 'bercher', 'Clara Blanc'), rita, nina, zoe, emma], groups)
+    expect(membersOf(plan.ordinaryPairings)).toEqual([['a', 'z']])
+    expect(plan.ordinaryPairings[0].result.usualStatus).toBe('mutual')
+  })
+
   it('separates a blocked usual duo, a feasible trio and a complete alternative', () => {
     const students = [alice, bea, rita]
     const plan = computeProvisionalPlan(students, scenario)

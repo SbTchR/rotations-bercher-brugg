@@ -46,8 +46,8 @@ const naturalCompare = (left, right) => left.localeCompare(right, 'fr-CH', { num
 
 const conditionLabels = {
   none: 'Aucune personne imposée',
-  regular_only: 'Son correspondant actuel uniquement',
-  different_only: 'Une autre personne que son correspondant',
+  regular_only: 'Un correspondant habituel uniquement',
+  different_only: 'Aucun correspondant habituel',
   named_only: 'Une personne précise uniquement',
 }
 
@@ -245,14 +245,17 @@ function StudentInspector({ student, students, scenario, onClose, onDecisionChan
     : places ? 'Voyage et accueil' : 'Voyage sans accueil'
   let correspondentDetail = 'L’élève reste libre si aucune condition ne l’impose.'
   if (correspondent.state === 'found') {
-    const label = hasCloseName ? 'Nom proche reconnu' : 'Ajouté'
+    const label = hasCloseName ? 'Rapprochement de noms' : 'Fiches retrouvées'
     const names = correspondent.matches.map(({ student }) => `${fullName(student)} (${student.className})`).join(' · ')
     correspondentDetail = `${label} · ${names}`
     if (correspondent.candidates.length) correspondentDetail += ` / Noms à préciser · ${correspondent.candidates.map(fullName).join(' · ')}`
   } else if (correspondent.state === 'ambiguous') {
     correspondentDetail = `Plusieurs noms possibles · ${correspondent.candidates.map(fullName).join(' · ')}`
   } else if (correspondent.state === 'missing') {
-    correspondentDetail = 'Pas encore ajouté dans l’application'
+    correspondentDetail = 'Fiches introuvables dans les inscriptions'
+  }
+  if (correspondent.state === 'found' && correspondent.missingNames.length) {
+    correspondentDetail += ` / Fiches introuvables · ${correspondent.missingNames.join(', ')}`
   }
   return (
     <aside className="pairing-inspector student-inspector">
@@ -264,7 +267,7 @@ function StudentInspector({ student, students, scenario, onClose, onDecisionChan
         <StudentConditionCard icon={UsersRound} title="Genre" tone={student.acceptsOtherGender ? 'clear' : 'attention'} value={student.acceptsOtherGender ? 'Autre sexe accepté' : 'Même sexe uniquement'} />
         <StudentConditionCard icon={places > 1 ? HousePlus : House} title="Participation" tone={!places ? 'unavailable' : student.participation === 'host_only' ? 'info' : 'clear'} value={places ? `${participationLabel} · ${places} place${places > 1 ? 's' : ''}` : participationLabel} />
       </section>
-      <section className={`correspondent-card ${correspondent.candidates.length || hasCloseName ? 'missing' : correspondent.state}`}><Link2 /><div><span>Correspondant habituel</span><strong>{correspondent.name || 'Non renseigné'}</strong><small>{correspondentDetail}</small></div></section>
+      <section className={`correspondent-card ${correspondent.candidates.length || correspondent.missingNames.length || hasCloseName ? 'missing' : correspondent.state}`}><Link2 /><div><span>Correspondants habituels</span><strong>{correspondent.name || 'Non renseigné'}</strong><small>{correspondentDetail}</small></div></section>
       {student.conditionType === 'named_only' && <section className={`correspondent-card ${requested ? 'found' : 'missing'}`}><UserPlus /><div><span>Personne demandée</span><strong>{student.namedPartner || 'Non renseignée'}</strong><small>{requested ? `Ajoutée · ${fullName(requested)} (${requested.className})` : 'Pas encore ajoutée dans l’application'}</small></div></section>}
       {(student.otherInfo || student.notes || student.groupPreference || student.animals) && <section className="student-extra-details"><h3>Autres infos utiles</h3><p className="confidential-detail"><span>{student.otherInfo || [student.animals, student.groupPreference, student.notes].filter(Boolean).join('\n')}</span></p></section>}
       <section className="scenario-decision">
