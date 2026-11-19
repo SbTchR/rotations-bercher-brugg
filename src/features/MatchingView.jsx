@@ -122,10 +122,10 @@ function StudentRail({ title, side, students, scenario, assigned, selectedIds, i
   const [filter, setFilter] = useState('all')
   const [school, setSchool] = useState('all')
   const [hosting, setHosting] = useState('all')
-  const [girlsOnly, setGirlsOnly] = useState(false)
+  const [gender, setGender] = useState('all')
   const [freePartner, setFreePartner] = useState(false)
   const [sameGenderOnly, setSameGenderOnly] = useState(false)
-  const criterionCount = Number(hosting !== 'all') + Number(girlsOnly) + Number(freePartner) + Number(sameGenderOnly)
+  const criterionCount = Number(hosting !== 'all') + Number(gender !== 'all') + Number(freePartner) + Number(sameGenderOnly)
   const items = students.filter((student) => {
     const matchText = `${fullName(student)} ${student.className}`.toLowerCase().includes(query.toLowerCase())
     const declined = !isMaintainedInScenario(student, scenario)
@@ -134,7 +134,7 @@ function StudentRail({ title, side, students, scenario, assigned, selectedIds, i
     const matchSchool = school === 'all' || student.school === school
     const matchHosting = hosting === 'all' || (hosting === '0' ? capacity === 0 : capacity >= Number(hosting))
     return matchText && matchFilter && matchSchool && matchHosting
-      && (!girlsOnly || student.gender === 'female')
+      && (gender === 'all' || student.gender === gender)
       && (!freePartner || student.conditionType === 'none')
       && (!sameGenderOnly || !student.acceptsOtherGender)
   })
@@ -151,7 +151,7 @@ function StudentRail({ title, side, students, scenario, assigned, selectedIds, i
       <details className="rail-filters">
         <summary><ListFilter size={15} aria-hidden="true" /> Critères {criterionCount > 0 && <b>{criterionCount}</b>}</summary>
         <div role="group" aria-label={`Critères à ${title}`}>
-          <label className="rail-hosting-filter">Accueil
+          <label className="rail-select-filter">Accueil
             <select aria-label="Accueil" value={hosting} onChange={(event) => setHosting(event.target.value)}>
               <option value="all">Toutes capacités</option>
               <option value="0">Accueil impossible</option>
@@ -159,7 +159,13 @@ function StudentRail({ title, side, students, scenario, assigned, selectedIds, i
               <option value="2">Au moins 2 places</option>
             </select>
           </label>
-          <label><input type="checkbox" checked={girlsOnly} onChange={(event) => setGirlsOnly(event.target.checked)} /> Filles</label>
+          <label className="rail-select-filter">Genre
+            <select aria-label="Genre" value={gender} onChange={(event) => setGender(event.target.value)}>
+              <option value="all">Tous les genres</option>
+              <option value="female">Filles</option>
+              <option value="male">Garçons</option>
+            </select>
+          </label>
           <label><input type="checkbox" checked={freePartner} onChange={(event) => setFreePartner(event.target.checked)} /> Partenaire indifférent</label>
           <label><input type="checkbox" checked={sameGenderOnly} onChange={(event) => setSameGenderOnly(event.target.checked)} /> Même sexe uniquement</label>
         </div>
@@ -457,7 +463,7 @@ export default function MatchingView() {
     setDraggedPairingId(pairingId)
   }
   return (
-    <div className={`view matching-view ${selectedStudent || selectedPairing ? 'has-inspector' : ''}`}>
+    <div className="view matching-view">
       <div className="view-heading">
         <h1>Appairages</h1>
         <div className="button-row"><button className="primary-button" onClick={() => setReviewInput({ scenario, students: workspace.students })}><Sparkles size={18} /> Appairage automatique</button><button className="secondary-button" onClick={newScenario}><Plus size={18} /> Nouveau scénario</button></div>
